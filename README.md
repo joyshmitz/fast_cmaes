@@ -138,6 +138,12 @@ println!("xmin = {:?}", xmin);
 - `examples/python_benchmarks.py` – Rust vs naive Python on sphere; naive on Rastrigin.
 - `examples/rich_tui_demo.py` – Rich TUI streaming sigma/fbest/evals while minimizing Rosenbrock.
 
+One-shot setup + demo runner:
+```bash
+./scripts/setup_and_demo.sh
+```
+What it does: ensures nightly Rust, creates a uv venv on Python 3.13, installs maturin + demo extras, builds the extension, and launches the Rich TUI.
+
 Run the TUI with uv + Python 3.13:
 ```bash
 uv venv --python 3.13
@@ -173,4 +179,4 @@ uv run python examples/rich_tui_demo.py
 - Please include failing cases or perf comparisons in issues/PRs.
 
 ## License
-MIT
+MIT (c) 2025 Jeffrey Emanuel
