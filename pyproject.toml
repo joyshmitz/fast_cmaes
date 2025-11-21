@@ -32,4 +32,4 @@ demo = ["rich>=13.7"]
 [tool.maturin]
 features = ["pyo3/extension-module"]
 strip = true
-python-source = "python"
+python-source = "python/fastcma_baseline"

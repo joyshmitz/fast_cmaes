@@ -14,7 +14,7 @@ use std::f64;
 use nalgebra::DMatrix;
 
 #[cfg(feature = "numpy_support")]
-use numpy::PyArray1;
+use numpy::PyReadonlyArray1;
 
 const SIMD_LANES: usize = 4;
 type SimdF64 = Simd<f64, SIMD_LANES>;
@@ -1046,8 +1046,8 @@ fn fmin_vec(
         let fitvals: Vec<f64> = {
             #[cfg(feature = "numpy_support")]
             {
-                if let Ok(arr) = fit_py.extract::<&PyArray1<f64>>(py) {
-                    let slice = unsafe { arr.as_slice()? };
+                if let Ok(arr) = fit_py.extract::<PyReadonlyArray1<f64>>(py) {
+                    let slice = arr.as_slice()?;
                     slice.to_vec()
                 } else {
                     fit_py.extract::<Vec<f64>>(py)?
