@@ -1,30 +1,90 @@
 # fastcma
 
-Hyper-optimized CMA-ES in Rust with a first-class Python experience. SIMD, rayon, deterministic seeds, vectorized objectives, restart strategies, and constraint handling — all accessible from Python while keeping the Rust core available for native use.
+[![CI](https://github.com/Dicklesworthstone/fast_cmaes/actions/workflows/build-wheels.yml/badge.svg)](https://github.com/Dicklesworthstone/fast_cmaes/actions/workflows/build-wheels.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](#license)
+[![Python](https://img.shields.io/badge/Python-3.9%20--%203.12-blue)](#installation-python)
+[![Rust](https://img.shields.io/badge/Rust-nightly-orange)](#rust-usage-library)
 
-## Why CMA-ES (quick refresher)
-- **What it is:** Covariance Matrix Adaptation Evolution Strategy — a derivative-free, stochastic optimizer that adapts step size and search covariance to follow curved landscapes.
-- **Why it’s great:** Works on noisy, non-convex, non-separable problems; needs only objective evaluations; naturally parallelizable.
-- **Core loop:** sample candidates → evaluate → rank → update mean / evolution paths / covariance → adapt sigma → repeat until tolerance/target/fevals.
+Hyper-optimized CMA-ES in Rust with a first-class Python experience. SIMD, rayon, deterministic seeds, vectorized objectives, restarts, constraints, and a Rich-powered TUI — all while keeping the Rust core available for native use.
 
-## Project architecture
-- **Rust core** (`src/lib.rs`): portable_simd for fast dot products, rayon for parallel fitness evaluation, optional LAPACK eigen backend (`eigen_lapack` feature), full/diagonal covariance modes, deterministic `new_with_seed` for tests and reproducible runs.
-- **Python binding** (PyO3, maturin): Python surface mirrors `purecma`-style APIs: `fmin`, `fmin_vec`, constrained and restart helpers. Wheels built for Py3.9–3.12 on Linux/macOS/Windows.
-- **Deterministic test utilities** (`test_utils`): seeded helpers, multiseed sweeps, restart helper with Gaussian perturbations.
-- **Naive baseline** (`python/naive_cma.py`): pure-Python CMA-ES for speed comparisons (`fastcma.cma_es`, `fastcma.benchmark_sphere`).
-- **Examples**: `examples/python_quickstart.py`, `examples/python_benchmarks.py`, plus Rust-side examples live in the library tests/benchmarks.
-- **CI**: `.github/workflows/build-wheels.yml` builds wheels on nightly Rust (portable_simd), runs smoke tests, and can publish to PyPI with `PYPI_API_TOKEN`.
+## Table of contents
+- [Why CMA-ES](#why-cma-es)
+- [Architecture (Mermaid)](#architecture-mermaid)
+- [Features](#features)
+- [Installation (Python)](#installation-python)
+- [Quickstart (Python)](#quickstart-python)
+- [Vectorized & Constraints](#vectorized--constraints)
+- [Rust usage](#rust-usage-library)
+- [Demos & TUI](#demos--visualization)
+- [Baselines & Benchmarks](#baselines--benchmarks)
+- [Performance choices](#performance-considerations)
+- [Feature flags](#feature-flags)
+- [Testing](#testing)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Why CMA-ES
+- Derivative-free, handles noisy/non-convex landscapes.
+- Adapts step size (sigma) and covariance to follow curved valleys.
+- Parallel-friendly: candidate evaluations are embarrassingly parallel.
+
+## Architecture (Mermaid)
+```mermaid
+flowchart LR
+    subgraph Python API
+    A[fmin / fmin_vec / CMAES class]
+    B[Constraints & restarts]
+    C[Naive baseline (pure Python)]
+    end
+
+    subgraph Rust Core (src/lib.rs)
+    D[Ask/Tell loop]
+    E[Covariance update (full/diag)]
+    F[Sigma adaptation]
+    G[SIMD dot + rayon fitness]
+    H[Deterministic seeds]
+    end
+
+    subgraph Tests & Demos
+    I[Benchmarks: sphere, rosenbrock, rastrigin, ackley, schwefel, griewank]
+    J[Rich TUI demo]
+    K[Python smoke]
+    end
+
+    A --> D
+    A --> B
+    B --> D
+    D --> E --> F --> D
+    D --> G
+    D --> H
+    I --> D
+    J --> A
+    K --> A
+    C --> A
+```
+
+## Features
+- **Python-first API**: `fmin`, `fmin_vec`, constrained, restart modes, and a `CMAES` class.
+- **SIMD + rayon**: portable_simd accelerates dot products; rayon parallelizes fitness calls.
+- **Full/Diagonal covariance**: switch via `covariance_mode`.
+- **Deterministic seeds**: `new_with_seed` + `test_utils` for reproducible runs and benchmarks.
+- **Pure-Python baseline**: `fastcma.cma_es` for speed comparisons.
+- **Rich TUI**: live, colorful CMA-ES progress view.
+- **Cross-platform wheels**: CI builds for Linux/macOS/Windows, Python 3.9–3.12.
 
 ## Installation (Python)
 ```bash
-python -m pip install maturin  # if building locally
-maturin develop --release              # or: pip install fastcma (when published)
+python -m pip install maturin           # if building locally
+maturin develop --release               # or: pip install fastcma (when published)
 
 # Optional: NumPy fast paths
 maturin develop --release --features numpy_support
 
 # Optional: LAPACK eigen backend
 maturin develop --release --features eigen_lapack
+
+# Demo extras (Rich TUI)
+python -m pip install .[demo]
 ```
 
 ## Quickstart (Python)
@@ -38,76 +98,79 @@ xmin, es = fmin(sphere, [0.5, -0.2, 0.8], sigma=0.3, maxfevals=4000, ftarget=1e-
 print("xmin", xmin)
 ```
 
-### Vectorized objectives
+## Vectorized & Constraints
 ```python
 from fastcma import fmin_vec
 
 def sphere_vec(X):
     return [sum(v*v for v in x) for x in X]
 
-xmin, es = fmin_vec(sphere_vec, [0.4, -0.1, 0.3], sigma=0.25, maxfevals=3000)
-print("xmin", xmin)
+xmin, _ = fmin_vec(sphere_vec, [0.4, -0.1, 0.3], sigma=0.25, maxfevals=3000)
 ```
 
-### Rust vs. pure-Python baseline
+Constrained run:
 ```python
-from fastcma import benchmark_sphere
+from fastcma import fmin_constrained
 
-print(benchmark_sphere(dim=20, iters=120))
+def sphere(x): return sum(v*v for v in x)
+constraints = {"lower_bounds": [-1,-1,-1], "upper_bounds": [1,1,1]}
+xmin, _ = fmin_constrained(sphere, [0.5,0.5,0.5], 0.3, constraints)
 ```
-
-### Ready-to-run scripts
-- `examples/python_quickstart.py` – minimal sphere example + vectorized demo.
-- `examples/python_benchmarks.py` – compares Rust vs naive Python on sphere and runs naive CMA-ES on Rastrigin.
-- `examples/rich_tui_demo.py` – Rich-powered TUI that live-visualizes CMA-ES optimizing Rosenbrock.
 
 ## Rust usage (library)
 ```rust
 use fastcma::{optimize_rust, CovarianceModeKind};
 
-let (xmin, state) = optimize_rust(vec![0.5, -0.2, 0.8], 0.3, None, Some(4000), Some(1e-12), CovarianceModeKind::Full, |x| x.iter().map(|v| v*v).sum());
+let (xmin, _state) = optimize_rust(
+    vec![0.5, -0.2, 0.8],
+    0.3,
+    None,
+    Some(4000),
+    Some(1e-12),
+    CovarianceModeKind::Full,
+    |x| x.iter().map(|v| v*v).sum()
+);
 println!("xmin = {:?}", xmin);
 ```
 
-## Performance considerations
-- **SIMD dot products** (portable_simd) and **rayon** parallel fitness evaluation.
-- **Lazy eigensystem updates** to avoid unnecessary decompositions.
-- **Full vs diagonal covariance**: choose via `covariance_mode="diag"` for speed on high dimensions.
-- **Determinism**: `new_with_seed` plus seeded test utilities make benchmarks repeatable.
-- **Restart helper**: `test_utils::run_with_restarts` supports simple restarted runs without exploding eval budgets.
+## Demos & visualization
+- `examples/python_quickstart.py` – minimal sphere + vectorized demo.
+- `examples/python_benchmarks.py` – Rust vs naive Python on sphere; naive on Rastrigin.
+- `examples/rich_tui_demo.py` – Rich TUI streaming sigma/fbest/evals while minimizing Rosenbrock.
 
-## Feature flags
-- `numpy_support`: enable NumPy array returns for vectorized objectives.
-- `eigen_lapack`: use LAPACK-based eigen solver (via nalgebra-lapack) instead of pure Rust.
-- `test_utils`: expose deterministic constructors/helpers to downstream tests.
-
-## Benchmarks & tests
-- Integration benchmarks (sphere, Rosenbrock, Rastrigin, Ackley, Schwefel, Griewank) in `tests/benchmarks.rs` use fixed seeds for stability.
-- Python smoke test: `tests/python_smoke.py` ensures wheel import + basic optimization + baseline.
-- Run everything: `cargo test` (Rust) and `pytest tests/python_smoke.py` (Python).
-
-## Rich TUI demo (Python 3.13 with uv)
+Run the TUI with uv + Python 3.13:
 ```bash
 uv venv --python 3.13
 uv pip install .[demo]
 uv run python examples/rich_tui_demo.py
 ```
-Streams live CMA-ES progress (sigma, fbest, evals) in color while minimizing Rosenbrock.
 
-## Demos & visualization
-- Scripts above print timing and objective values for Rust vs Python baselines. You can drop the results into a notebook for plots; outputs are plain dicts for easy pandas ingestion.
+## Baselines & benchmarks
+- Pure Python baseline: `fastcma.cma_es`, `fastcma.benchmark_sphere` (see `python/naive_cma.py`).
+- Integration benchmarks (fixed seeds): sphere, Rosenbrock, Rastrigin, Ackley, Schwefel, Griewank in `tests/benchmarks.rs`.
+- Rich TUI demo for live insight.
 
-## Design choices (high level)
-- **Portable SIMD + rayon**: better CPU utilization without custom C/AVX intrinsics.
-- **NALgebra covariance / eigen**: leverages battle-tested linear algebra; LAPACK optional for parity with reference implementations.
-- **Configurable covariance (full/diag)**: switch depending on dimension and conditioning.
-- **Deterministic testing**: seeded RNG to make convergence tests non-flaky.
-- **Python-first surface**: API mirrors familiar `purecma` functions while keeping Rust ergonomic.
+## Performance considerations
+- **SIMD** for dot products; **rayon** for parallel ask/tell evaluations.
+- **Lazy eigensystem updates** to reduce eigen decompositions.
+- **Diagonal covariance** option for higher dimensions / speed.
+- **Determinism**: seeded RNG to make tests non-flaky and benchmarks comparable.
+- **Restart helper** (`test_utils::run_with_restarts`) to escape local minima without huge budgets.
+
+## Feature flags
+- `numpy_support`: NumPy array support in vectorized objectives.
+- `eigen_lapack`: LAPACK eigen backend.
+- `test_utils`: expose deterministic helpers externally.
+- `demo`: pulls in `rich` for the TUI.
+
+## Testing
+- Rust: `cargo test`
+- Python smoke: `pytest tests/python_smoke.py`
+- CI: GitHub Actions builds wheels on nightly Rust; runs smoke tests; can publish to PyPI when `PYPI_API_TOKEN` is set.
 
 ## Contributing
-- Tests: `cargo test` (Rust) and `pytest tests/python_smoke.py` (Python).
 - Nightly Rust required (see `rust-toolchain.toml`).
-- Issues/PRs welcome; please include failing cases or perf comparisons when relevant.
+- Please include failing cases or perf comparisons in issues/PRs.
 
 ## License
 MIT

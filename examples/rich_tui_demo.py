@@ -36,6 +36,8 @@ def main():
 
     es = fastcma.CMAES([ -1.2, 1.0 ], 0.5, ftarget=1e-10, maxfevals=20_000)
 
+    _xbest, _fbest, _evals_best, _counteval, _iters, _xmean, stds0 = es.result
+
     progress = Progress(
         SpinnerColumn(spinner_name="dots"),
         TextColumn("{task.description}"),
@@ -45,7 +47,7 @@ def main():
         TimeElapsedColumn(),
         refresh_per_second=10,
     )
-    task_id = progress.add_task("Optimizing Rosenbrock", total=None, sigma=es.result[5][0], fbest=float("inf"))
+    task_id = progress.add_task("Optimizing Rosenbrock", total=None, sigma=stds0[0], fbest=float("inf"))
 
     def stats_panel(iteration: int, fbest: float, xbest: List[float]):
         table = Table.grid(padding=1)
@@ -70,7 +72,7 @@ def main():
         progress,
     )
 
-    with Live(layout(0, float("inf"), [math.nan, math.nan]), console=console, refresh_per_second=10):
+    with Live(layout(0, float("inf"), [math.nan, math.nan]), console=console, refresh_per_second=10) as live:
         iteration = 0
         while True:
             X = es.ask()
@@ -80,7 +82,7 @@ def main():
 
             xbest, fbest, _, counteval, _iters, xmean, stds = es.result
             progress.update(task_id, completed=counteval, sigma=stds[0], fbest=fbest)
-            Live.current.set_renderable(layout(iteration, fbest, xbest))
+            live.update(layout(iteration, fbest, xbest))
 
             if es.stop():
                 break
