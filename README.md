@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/Python-3.9%20--%203.12-blue)](#installation-python)
 [![Rust](https://img.shields.io/badge/Rust-nightly-orange)](#rust-usage-library)
 
-Hyper-optimized CMA-ES in Rust with a first-class Python experience. SIMD, rayon, deterministic seeds, vectorized objectives, restarts, constraints, and a Rich-powered TUI — all while keeping the Rust core available for native use.
+Hyper-optimized CMA-ES in Rust with a first-class Python experience. SIMD, rayon, deterministic seeds, vectorized objectives, restarts, constraints, and a Rich-powered TUI — all while keeping the Rust core available for native use. Published to PyPI as `fast-cmaes` (module name: `fastcma`).
 
 ## Table of contents
 - [Why CMA-ES](#why-cma-es)
@@ -74,8 +74,11 @@ flowchart LR
 
 ## Installation (Python)
 ```bash
-python -m pip install maturin           # if building locally
-maturin develop --release               # or: pip install fastcma (when published)
+python -m pip install fast-cmaes        # from PyPI (installs module `fastcma`)
+
+# or build locally
+python -m pip install maturin
+maturin develop --release
 
 # Optional: NumPy fast paths
 maturin develop --release --features numpy_support

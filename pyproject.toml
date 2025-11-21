@@ -3,7 +3,7 @@ requires = ["maturin>=1.6,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "fastcma"
+name = "fast-cmaes"
 version = "0.1.0"
 description = "Hyper-optimized CMA-ES core in Rust with a Python interface"
 requires-python = ">=3.9"

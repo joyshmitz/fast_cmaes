@@ -2,9 +2,10 @@ name: Build and Publish Wheels
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
+    tags: [ "v*" ]
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -56,7 +57,7 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/main')
+    if: github.ref_type == 'tag'
 
     steps:
       - name: Download all wheels
