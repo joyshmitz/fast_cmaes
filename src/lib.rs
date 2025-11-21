@@ -252,7 +252,7 @@ impl FullCovariance {
             return;
         }
         self.enforce_symmetry();
-        let (eigs, basis) = symmetric_eigen_from_data(&self.data, self.n);
+        let (mut eigs, basis) = symmetric_eigen_from_data(&self.data, self.n);
         let mut min_ev = f64::INFINITY;
         let mut max_ev = 0.0;
         for &ev in &eigs {
@@ -264,10 +264,15 @@ impl FullCovariance {
             }
         }
         if min_ev <= 0.0 {
-            panic!(
-                "Eigenvalues not all positive, smallest = {} at eval {}",
-                min_ev, current_eval
-            );
+            // Floor tiny/negative eigenvalues to keep the eigensystem usable without panicking.
+            let eps = 1e-20;
+            for ev in &mut eigs {
+                if *ev < eps {
+                    *ev = eps;
+                }
+            }
+            min_ev = eigs.iter().fold(f64::INFINITY, |m, &v| m.min(v));
+            max_ev = eigs.iter().fold(0.0f64, |m, &v| m.max(v));
         }
         let n = self.n;
         let mut invsqrt = vec![0.0; n * n];
@@ -283,8 +288,8 @@ impl FullCovariance {
                 invsqrt[j * n + i] = sum;
             }
         }
-        self.eigenvalues = eigs;
         self.eigenbasis = basis;
+        self.eigenvalues = eigs;
         self.invsqrt = invsqrt;
         self.condition_number = max_ev / min_ev;
         self.updated_eval = current_eval;
@@ -605,10 +610,13 @@ impl CmaesState {
     fn tell(&mut self, arx: Vec<Vec<f64>>, fitvals: Vec<f64>) {
         let lam = self.params.lam;
         if arx.len() != lam || fitvals.len() != lam {
-            panic!(
-                "tell: expected {} candidate solutions and fitness values",
-                lam
+            eprintln!(
+                "tell: expected {} candidates, got arx={}, fitvals={}",
+                lam,
+                arx.len(),
+                fitvals.len()
             );
+            return;
         }
         self.counteval += fitvals.len();
         let n = self.n;
