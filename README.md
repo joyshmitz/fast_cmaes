@@ -3,7 +3,7 @@
 [![CI](https://github.com/Dicklesworthstone/fast_cmaes/actions/workflows/build-wheels.yml/badge.svg)](https://github.com/Dicklesworthstone/fast_cmaes/actions/workflows/build-wheels.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](#license)
 [![PyPI](https://img.shields.io/pypi/v/fast-cmaes.svg)](https://pypi.org/project/fast-cmaes/)
-[![Python](https://img.shields.io/badge/Python-3.9%20--%203.14-blue)](#installation-python)
+[![Python](https://img.shields.io/badge/Python-3.12%20--%203.14-blue)](#installation-python)
 [![Rust](https://img.shields.io/badge/Rust-nightly-orange)](#rust-usage-library)
 
 Hyper-optimized CMA-ES in Rust with a first-class Python experience. SIMD, rayon, deterministic seeds, vectorized objectives, restarts, constraints, and a Rich-powered TUI — all while keeping the Rust core available for native use. Published to PyPI as `fast-cmaes` (module name: `fastcma`).
@@ -71,7 +71,7 @@ flowchart LR
 - **Deterministic seeds**: `new_with_seed` + `test_utils` for reproducible runs and benchmarks.
 - **Pure-Python baseline**: `fastcma.cma_es` for speed comparisons.
 - **Rich TUI**: live, colorful CMA-ES progress view.
-- **Cross-platform wheels**: CI builds for Linux/macOS/Windows, Python 3.9–3.12.
+- **Cross-platform wheels**: CI builds for Linux/macOS/Windows, Python 3.12–3.14.
 
 ## Installation (Python)
 Fastest path (PyPI):
