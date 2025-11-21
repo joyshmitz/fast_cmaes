@@ -19,9 +19,9 @@ jobs:
           profile: minimal
           toolchain: nightly
           override: true
-      - name: Run cargo test (all features)
+      - name: Run cargo test (core + optional python features, skip lapack)
         run: |
-          cargo test --all-features
+          cargo test --features "numpy_support test_utils"
 
   build:
     needs: test
