@@ -5,7 +5,12 @@ use rand_chacha::ChaCha8Rng;
 /// Return a simple version number (major<<16 | minor<<8 | patch).
 #[no_mangle]
 pub extern "C" fn fastcma_version() -> u32 {
-    (0u32 << 16) | (1u32 << 8) | 4u32
+    const VER: &str = env!("CARGO_PKG_VERSION");
+    let mut parts = VER.split('.').filter_map(|p| p.parse::<u32>().ok());
+    let major = parts.next().unwrap_or(0);
+    let minor = parts.next().unwrap_or(0);
+    let patch = parts.next().unwrap_or(0);
+    (major << 16) | (minor << 8) | patch
 }
 
 /// Minimize sphere in C: returns best value; fills xmin buffer if provided.
