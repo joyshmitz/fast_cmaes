@@ -180,6 +180,7 @@ uv run python examples/rich_tui_demo.py
 - **Lazy eigensystem updates** to reduce eigen decompositions.
 - **Diagonal covariance** option for higher dimensions / speed.
 - **IPOP/BIPOP restarts** including a parallel multi-pop helper (`test_utils::run_ipop_bipop_parallel`); Python `fmin_restart` defaults to BIPOP.
+- **Noise handling**: optional sigma expansion on detected noisy fitness (Python `noise=True` in `fmin` / `fmin_vec` / `fmin_constrained`; Rust test helper `run_seeded_mode_noise`).
 - **Determinism**: seeded RNG to make tests non-flaky and benchmarks comparable.
 - **Restart helper** (`test_utils::run_with_restarts`) to escape local minima without huge budgets.
 

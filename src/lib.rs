@@ -498,6 +498,9 @@ struct CmaesState {
     params: CmaesParameters,
     maxfevals: usize,
     ftarget: Option<f64>,
+    sigma0: f64,
+    noise_cfg: Option<NoiseConfig>,
+    noise_cooldown: usize,
     rng: StdRng,
     xmean: Vec<f64>,
     sigma: f64,
@@ -512,6 +515,14 @@ struct CmaesState {
     tmp_buf: Vec<f64>,
     pending_arx: Vec<Vec<f64>>,
     pending_fitvals: Vec<f64>,
+}
+
+#[derive(Clone, Copy)]
+struct NoiseConfig {
+    threshold_rel: f64,
+    sigma_expand: f64,
+    max_sigma_factor: f64,
+    cooldown_iters: usize,
 }
 
 impl CmaesState {
@@ -547,6 +558,9 @@ impl CmaesState {
             params,
             maxfevals: maxfevals_val,
             ftarget,
+            sigma0: sigma,
+            noise_cfg: None,
+            noise_cooldown: 0,
             rng: StdRng::from_entropy(),
             xmean: xstart,
             sigma,
@@ -577,6 +591,11 @@ impl CmaesState {
         let mut state = Self::new(xstart, sigma, popsize, ftarget, maxfevals, covariance_mode);
         state.rng = StdRng::seed_from_u64(seed);
         state
+    }
+
+    fn with_noise(mut self, cfg: NoiseConfig) -> Self {
+        self.noise_cfg = Some(cfg);
+        self
     }
     fn ask(&mut self) -> Vec<Vec<f64>> {
         self.cov
@@ -720,6 +739,24 @@ impl CmaesState {
         let exponent = cn * (sum_ps_sq / n_f - 1.0) / 2.0;
         let exponent_clamped = exponent.clamp(-1.0, 1.0);
         self.sigma *= exponent_clamped.exp();
+
+        // Noise handling: if fitness spread is very small relative to best value,
+        // we may be stuck under noisy evaluations. Expand sigma to escape.
+        if let Some(cfg) = self.noise_cfg {
+            if self.noise_cooldown > 0 {
+                self.noise_cooldown -= 1;
+            } else if self.fitvals.len() >= 2 {
+                let best = self.fitvals[0];
+                let mid = self.fitvals[self.fitvals.len() / 2];
+                let scale = best.abs().max(1.0);
+                let spread = (mid - best).abs() / scale;
+                if spread < cfg.threshold_rel {
+                    let max_sigma = self.sigma0 * cfg.max_sigma_factor;
+                    self.sigma = (self.sigma * cfg.sigma_expand).min(max_sigma);
+                    self.noise_cooldown = cfg.cooldown_iters;
+                }
+            }
+        }
     }
     fn tell_one(&mut self, x: Vec<f64>, f: f64) {
         self.pending_arx.push(x);
@@ -963,7 +1000,7 @@ impl PyFF {
 
 #[pyfunction]
 #[pyo3(
-    signature = (objective_fct, xstart, sigma, maxfevals=None, ftarget=None, verb_disp=None, covariance_mode=None)
+    signature = (objective_fct, xstart, sigma, maxfevals=None, ftarget=None, verb_disp=None, covariance_mode=None, noise=false)
 )]
 fn fmin(
     py: Python<'_>,
@@ -974,9 +1011,18 @@ fn fmin(
     ftarget: Option<f64>,
     verb_disp: Option<usize>,
     covariance_mode: Option<&str>,
+    noise: bool,
 ) -> PyResult<(Vec<f64>, Py<PyCmaes>)> {
     let mode = parse_covariance_mode(covariance_mode)?;
     let mut es = CmaesState::new(xstart, sigma, None, ftarget, maxfevals, mode);
+    if noise {
+        es = es.with_noise(NoiseConfig {
+            threshold_rel: 1e-3,
+            sigma_expand: 1.6,
+            max_sigma_factor: 5.0,
+            cooldown_iters: 5,
+        });
+    }
     let disp_mod = verb_disp.unwrap_or(100);
     loop {
         if es.has_terminated() {
@@ -1013,7 +1059,7 @@ fn fmin(
 
 #[pyfunction]
 #[pyo3(
-    signature = (objective_fct, xstart, sigma, maxfevals=None, ftarget=None, verb_disp=None, covariance_mode=None)
+    signature = (objective_fct, xstart, sigma, maxfevals=None, ftarget=None, verb_disp=None, covariance_mode=None, noise=false)
 )]
 fn fmin_vec(
     py: Python<'_>,
@@ -1024,9 +1070,18 @@ fn fmin_vec(
     ftarget: Option<f64>,
     verb_disp: Option<usize>,
     covariance_mode: Option<&str>,
+    noise: bool,
 ) -> PyResult<(Vec<f64>, Py<PyCmaes>)> {
     let mode = parse_covariance_mode(covariance_mode)?;
     let mut es = CmaesState::new(xstart, sigma, None, ftarget, maxfevals, mode);
+    if noise {
+        es = es.with_noise(NoiseConfig {
+            threshold_rel: 1e-3,
+            sigma_expand: 1.6,
+            max_sigma_factor: 5.0,
+            cooldown_iters: 5,
+        });
+    }
     let disp_mod = verb_disp.unwrap_or(100);
     loop {
         if es.has_terminated() {
@@ -1118,7 +1173,7 @@ fn apply_box_constraints(x: &mut [f64], lb: Option<&[f64]>, ub: Option<&[f64]>) 
 
 #[pyfunction]
 #[pyo3(
-    signature = (objective_fct, xstart, sigma, constraints, maxfevals=None, ftarget=None, verb_disp=None, covariance_mode=None)
+    signature = (objective_fct, xstart, sigma, constraints, maxfevals=None, ftarget=None, verb_disp=None, covariance_mode=None, noise=false)
 )]
 fn fmin_constrained(
     py: Python<'_>,
@@ -1130,9 +1185,18 @@ fn fmin_constrained(
     ftarget: Option<f64>,
     verb_disp: Option<usize>,
     covariance_mode: Option<&str>,
+    noise: bool,
 ) -> PyResult<(Vec<f64>, Py<PyCmaes>)> {
     let mode = parse_covariance_mode(covariance_mode)?;
     let mut es = CmaesState::new(xstart, sigma, None, ftarget, maxfevals, mode);
+    if noise {
+        es = es.with_noise(NoiseConfig {
+            threshold_rel: 1e-3,
+            sigma_expand: 1.6,
+            max_sigma_factor: 5.0,
+            cooldown_iters: 5,
+        });
+    }
     let disp_mod = verb_disp.unwrap_or(100);
 
     let lb: Option<Vec<f64>> = match constraints.get_item("lower_bounds")? {
@@ -1357,7 +1421,7 @@ where
 /// Test-only helpers to run deterministic CMA-ES steps from integration tests.
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils {
-    use super::{CmaesParameters, CmaesState, CovarianceModeKind};
+    use super::{CmaesParameters, CmaesState, CovarianceModeKind, NoiseConfig};
     use rand::{rngs::StdRng, Rng, SeedableRng};
     use rand_distr::StandardNormal;
 
@@ -1408,6 +1472,43 @@ pub mod test_utils {
             CovarianceModeKind::Full,
             objective,
         )
+    }
+
+    /// Seeded run with noise handling enabled (IPOP/BIPOP remains off).
+    pub fn run_seeded_mode_noise(
+        x0: Vec<f64>,
+        sigma: f64,
+        maxfevals: usize,
+        ftarget: f64,
+        seed: u64,
+        covariance_mode: CovarianceModeKind,
+        objective: impl Fn(&[f64]) -> f64,
+    ) -> f64 {
+        let cfg = NoiseConfig {
+            threshold_rel: 1e-3,
+            sigma_expand: 1.6,
+            max_sigma_factor: 5.0,
+            cooldown_iters: 5,
+        };
+        let mut es = CmaesState::new_with_seed(
+            x0,
+            sigma,
+            None,
+            Some(ftarget),
+            Some(maxfevals),
+            covariance_mode,
+            seed,
+        )
+        .with_noise(cfg);
+
+        while !es.has_terminated() {
+            let x_candidates = es.ask();
+            let fitvals: Vec<f64> = x_candidates.iter().map(|x| objective(x)).collect();
+            es.tell(x_candidates, fitvals);
+        }
+
+        let (_xbest, fbest, _, _, _, _, _) = es.result();
+        fbest
     }
 
     /// Run multiple seeds and return the best objective value.

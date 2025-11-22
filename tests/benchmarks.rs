@@ -1,5 +1,10 @@
-use fastcma::test_utils::{run_ipop_bipop_parallel, run_multiseed, run_seeded, run_seeded_mode};
+use fastcma::test_utils::{
+    run_ipop_bipop_parallel, run_multiseed, run_seeded, run_seeded_mode, run_seeded_mode_noise,
+};
 use fastcma::CovarianceModeKind;
+use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand_distr::StandardNormal;
+use std::cell::RefCell;
 
 fn rastrigin(x: &[f64]) -> f64 {
     let n = x.len() as f64;
@@ -77,6 +82,26 @@ fn rastrigin_bipop_parallel_restarts() {
         &rastrigin,
     );
     assert!(fbest < 1.5, "bipop parallel restarts stalled: {fbest}");
+}
+
+#[test]
+fn noisy_sphere_noise_handling() {
+    let rng = RefCell::new(StdRng::seed_from_u64(12345));
+    let noise_sphere = |x: &[f64]| {
+        let noise: f64 = rng.borrow_mut().sample::<f64, _>(StandardNormal) * 0.05;
+        let f = x.iter().map(|v| v * v).sum::<f64>();
+        f + noise
+    };
+    let fbest = run_seeded_mode_noise(
+        vec![0.8; 6],
+        0.5,
+        20_000,
+        1e-6,
+        2025,
+        CovarianceModeKind::Full,
+        noise_sphere,
+    );
+    assert!(fbest < 0.05, "noise handling failed to converge: {fbest}");
 }
 
 fn schwefel(x: &[f64]) -> f64 {
