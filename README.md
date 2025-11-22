@@ -60,48 +60,38 @@ The core strength lies in its adaptive mechanisms. The step size $$\sigma$$ cont
 ## 🏗️ Architecture
 
 ```mermaid
-flowchart TD
-    subgraph PythonAPI["🐍 Python API Layer"]
-        direction TB
-        A["✨ fmin<br/>fmin_vec<br/>CMAES class"]
-        B["🔒 Constraints<br/>and restarts"]
-        C["📊 Naive baseline<br/>pure Python"]
-        A -.->|uses| B
-        C -.->|compares| A
+flowchart LR
+    subgraph PythonAPI["Python API"]
+        A[fmin/fmin_vec/CMAES]
+        B[Constraints/Restarts]
+        C[Baseline]
     end
 
-    subgraph RustCore["🦀 Rust Core Engine<br/>src/lib.rs"]
-        direction TB
-        D["🔄 Ask Tell loop<br/>Core optimizer"]
-        E["📐 Covariance update<br/>full or diagonal"]
-        F["📈 Sigma adaptation<br/>step size control"]
-        G["⚡ SIMD dot products<br/>rayon parallel fitness"]
-        H["🎲 Deterministic seeds<br/>reproducible runs"]
-        D -->|updates| E
-        E -->|adapts| F
-        F -->|feeds back| D
-        D -->|uses| G
-        D -->|seeds| H
+    subgraph RustCore["Rust Core"]
+        D[Ask-Tell]
+        E[Covariance]
+        F[Sigma]
+        G[SIMD/Rayon]
     end
 
-    subgraph TestsDemos["🧪 Tests & Demos"]
-        direction TB
-        I["📉 Benchmarks<br/>sphere rosenbrock<br/>rastrigin ackley"]
-        J["🎨 Rich TUI demo<br/>live visualization"]
-        K["✅ Python smoke<br/>integration tests"]
+    subgraph TestsDemos["Tests"]
+        I[Benchmarks]
+        J[TUI]
+        K[Integration]
     end
 
-    PythonAPI -->|"API calls"| RustCore
-    TestsDemos -->|"validates"| RustCore
-    TestsDemos -->|"demonstrates"| PythonAPI
+    A --> D
+    B --> D
+    PythonAPI --> RustCore
+    TestsDemos --> RustCore
 
-    classDef pythonStyle fill:#3776ab,stroke:#ffd43b,stroke-width:3px,color:#fff,font-weight:bold
-    classDef rustStyle fill:#ce412b,stroke:#fbbf24,stroke-width:3px,color:#fff,font-weight:bold
-    classDef testStyle fill:#10b981,stroke:#34d399,stroke-width:3px,color:#fff,font-weight:bold
-    classDef subgraphStyle fill:#f9fafb,stroke:#374151,stroke-width:3px
+    classDef pythonStyle fill:#b3d9ff,stroke:#7fb3d3,stroke-width:1px,color:#333
+    classDef rustStyle fill:#ffcccc,stroke:#ff9999,stroke-width:1px,color:#333
+    classDef testStyle fill:#b3e5d1,stroke:#7fb8a3,stroke-width:1px,color:#333
+    classDef subgraphStyle fill:#f5f5f5,stroke:#ccc,stroke-width:1px
 
     class A,B,C pythonStyle
-    class D,E,F,G,H rustStyle
+    class D,E,F,G rustStyle
     class I,J,K testStyle
     class PythonAPI,RustCore,TestsDemos subgraphStyle
 ```
@@ -116,27 +106,24 @@ The optimizer follows the classic CMA-ES ask-tell pattern:
 
 ```mermaid
 flowchart TD
-    Start([Start Optimization]) --> Init[Initialize xmean, sigma, C]
-    Init --> Ask[ask: Generate λ candidates]
-    Ask --> Sample[Sample from Nxmean, sigma²C]
-    Sample --> Eval[Evaluate fitness fxi]
-    Eval --> Tell[tell: Update distribution]
-    Tell --> Rank[Rank candidates by fitness]
-    Rank --> UpdateMean[Update xmean weighted mean]
-    UpdateMean --> UpdatePaths[Update evolution paths pc, ps]
-    UpdatePaths --> UpdateCov[Update covariance C]
-    UpdateCov --> UpdateSigma[Adapt step size sigma]
-    UpdateSigma --> CheckTerm{Terminated?}
+    Start([Start]) --> Init[Init xmean, σ, C]
+    Init --> Ask[ask: Generate λ]
+    Ask --> Eval[Evaluate fitness]
+    Eval --> Tell[tell: Update]
+    Tell --> UpdateMean[Update xmean]
+    UpdateMean --> UpdateCov[Update C]
+    UpdateCov --> UpdateSigma[Adapt σ]
+    UpdateSigma --> CheckTerm{Done?}
     CheckTerm -->|No| Ask
-    CheckTerm -->|Yes| End([Return best solution])
+    CheckTerm -->|Yes| End([Return])
     
-    classDef askStyle fill:#3b82f6,stroke:#1e40af,stroke-width:2px,color:#fff
-    classDef tellStyle fill:#10b981,stroke:#059669,stroke-width:2px,color:#fff
-    classDef decisionStyle fill:#f59e0b,stroke:#d97706,stroke-width:2px,color:#fff
-    classDef startEndStyle fill:#8b5cf6,stroke:#6d28d9,stroke-width:3px,color:#fff
+    classDef askStyle fill:#b3d9ff,stroke:#7fb3d3,stroke-width:1px,color:#333
+    classDef tellStyle fill:#b3e5d1,stroke:#7fb8a3,stroke-width:1px,color:#333
+    classDef decisionStyle fill:#ffe0b3,stroke:#ffcc80,stroke-width:1px,color:#333
+    classDef startEndStyle fill:#e1bee7,stroke:#ce93d8,stroke-width:1px,color:#333
     
-    class Ask,Sample,Eval askStyle
-    class Tell,Rank,UpdateMean,UpdatePaths,UpdateCov,UpdateSigma tellStyle
+    class Ask,Eval askStyle
+    class Tell,UpdateMean,UpdateCov,UpdateSigma tellStyle
     class CheckTerm decisionStyle
     class Start,End startEndStyle
 ```
@@ -145,20 +132,20 @@ flowchart TD
 
 - **`ask()`**: Generates $$\lambda$$ candidate solutions by sampling:
   
-  $$x_i \sim \mathcal{N}(\mathbf{x}_{\mathrm{mean}}, \sigma^2 \mathbf{C})$$
+  $$x_i \sim \mathcal{N}(\mathbf{x}_{\text{mean}}, \sigma^2 \mathbf{C})$$
   
   where $$\mathbf{C}$$ is the covariance matrix and $$\sigma$$ is the step size.
 
 - **`tell()`**: Updates distribution parameters:
   - **Weighted mean**: 
     
-    $$\mathbf{x}_{\mathrm{mean}} \leftarrow \sum_{i=1}^{\mu} w_i \mathbf{x}_{i:\lambda}$$
+    $$\mathbf{x}_{\text{mean}} \leftarrow \sum_{i=1}^{\mu} w_i \mathbf{x}_{i:\lambda}$$
   
   - **Evolution paths**: 
     
-    $$\mathbf{p}_c \leftarrow (1-c_c)\mathbf{p}_c + c_c h_{\sigma} \frac{\mathbf{x}_{\mathrm{mean}} - \mathbf{x}_{\mathrm{old}}}{\sigma}$$
+    $$\mathbf{p}_c \leftarrow (1-c_c)\mathbf{p}_c + c_c h_{\sigma} \frac{\mathbf{x}_{\text{mean}} - \mathbf{x}_{\text{old}}}{\sigma}$$
     
-    $$\mathbf{p}_{\sigma} \leftarrow (1-c_{\sigma})\mathbf{p}_{\sigma} + c_{\sigma} \frac{\mathbf{C}^{-1/2}(\mathbf{x}_{\mathrm{mean}} - \mathbf{x}_{\mathrm{old}})}{\sigma}$$
+    $$\mathbf{p}_{\sigma} \leftarrow (1-c_{\sigma})\mathbf{p}_{\sigma} + c_{\sigma} \frac{\mathbf{C}^{-1/2}(\mathbf{x}_{\text{mean}} - \mathbf{x}_{\text{old}})}{\sigma}$$
   
   - **Covariance update**: 
     
@@ -166,7 +153,7 @@ flowchart TD
   
   - **Step size adaptation**: 
     
-    $$\sigma \leftarrow \sigma \exp\left(\frac{c_{\sigma}}{d_{\sigma}}\left(\frac{\|\mathbf{p}_{\sigma}\|}{\mathbb{E}\|\mathcal{N}(\mathbf{0},\mathbf{I})\|} - 1\right)\right)$$
+    $$\sigma \leftarrow \sigma \exp\left(\frac{c_{\sigma}}{d_{\sigma}}\left(\frac{\|\mathbf{p}_{\sigma}\|}{\mathbb{E}[\|\mathcal{N}(\mathbf{0},\mathbf{I})\|]} - 1\right)\right)$$
 
 **2. Covariance Representation (`CovarianceMode`)**
 
@@ -174,22 +161,19 @@ Two modes optimize for different problem characteristics:
 
 ```mermaid
 flowchart TD
-    Start([Covariance Mode Selection]) --> CheckDim{Dimension n}
-    CheckDim -->|n < 50| Full[Full Covariance<br/>n×n matrix<br/>O n³ eigen decomp]
-    CheckDim -->|n ≥ 50 or separable| Diag[Diagonal Covariance<br/>n elements<br/>O n updates]
+    Start([Mode Selection]) --> CheckDim{n < 50?}
+    CheckDim -->|Yes| Full[Full: n×n, O(n³)]
+    CheckDim -->|No| Diag[Diagonal: n, O(n)]
     
-    Full --> FullFeatures[Captures correlations<br/>Adapts to curved valleys<br/>Slower but more accurate]
-    Diag --> DiagFeatures[Assumes independence<br/>Faster updates<br/>Good for separable problems]
+    Full --> FullUse[Correlations, curved valleys]
+    Diag --> DiagUse[Fast, separable]
     
-    FullFeatures --> FullUse[Best for:<br/>Low-medium dimensions<br/>Correlated variables<br/>Complex landscapes]
-    DiagFeatures --> DiagUse[Best for:<br/>High dimensions<br/>Separable problems<br/>Speed-critical]
+    classDef fullStyle fill:#b3d9ff,stroke:#7fb3d3,stroke-width:1px,color:#333
+    classDef diagStyle fill:#b3e5d1,stroke:#7fb8a3,stroke-width:1px,color:#333
+    classDef decisionStyle fill:#ffe0b3,stroke:#ffcc80,stroke-width:1px,color:#333
     
-    classDef fullStyle fill:#3b82f6,stroke:#1e40af,stroke-width:2px,color:#fff
-    classDef diagStyle fill:#10b981,stroke:#059669,stroke-width:2px,color:#fff
-    classDef decisionStyle fill:#f59e0b,stroke:#d97706,stroke-width:2px,color:#fff
-    
-    class Full,FullFeatures,FullUse fullStyle
-    class Diag,DiagFeatures,DiagUse diagStyle
+    class Full,FullUse fullStyle
+    class Diag,DiagUse diagStyle
     class CheckDim decisionStyle
 ```
 
@@ -228,30 +212,24 @@ The first term decays the current covariance, preventing it from growing unbound
 **Optimization Strategy Overview:**
 
 ```mermaid
-flowchart TD
-    Start([Performance Optimization]) --> SIMD[SIMD Acceleration<br/>4x speedup on dot products]
-    Start --> Lazy[Lazy Eigensystem<br/>5-10x fewer decompositions]
-    Start --> Rayon[Rayon Parallelization<br/>Linear speedup with cores]
-    Start --> Buffers[Pre-allocated Buffers<br/>Zero-allocation loops]
-    Start --> Symmetry[Symmetry Enforcement<br/>Numerical stability]
+flowchart LR
+    Start([Optimizations]) --> SIMD[SIMD 4x]
+    Start --> Lazy[Lazy Eigen 5-10x]
+    Start --> Rayon[Rayon Linear]
+    Start --> Buffers[Pre-alloc]
+    Start --> Symmetry[Symmetry]
     
-    SIMD --> SIMDImpact[Used in:<br/>Mahalanobis norm<br/>Square sums<br/>Constraint clamping]
-    Lazy --> LazyImpact[Critical for:<br/>High dimensions n > 20<br/>Reduces O n³ cost]
-    Rayon --> RayonImpact[Best for:<br/>Expensive objectives<br/>Parallelizable workloads]
-    Buffers --> BufferImpact[Critical for:<br/>Low-latency apps<br/>Hot path optimization]
-    Symmetry --> SymImpact[Applied before:<br/>Eigen decomposition<br/>Prevents numerical drift]
+    classDef simdStyle fill:#b3d9ff,stroke:#7fb3d3,stroke-width:1px,color:#333
+    classDef lazyStyle fill:#b3e5d1,stroke:#7fb8a3,stroke-width:1px,color:#333
+    classDef rayonStyle fill:#ffe0b3,stroke:#ffcc80,stroke-width:1px,color:#333
+    classDef bufferStyle fill:#e1bee7,stroke:#ce93d8,stroke-width:1px,color:#333
+    classDef symStyle fill:#f8bbd0,stroke:#f48fb1,stroke-width:1px,color:#333
     
-    classDef simdStyle fill:#3b82f6,stroke:#1e40af,stroke-width:2px,color:#fff
-    classDef lazyStyle fill:#10b981,stroke:#059669,stroke-width:2px,color:#fff
-    classDef rayonStyle fill:#f59e0b,stroke:#d97706,stroke-width:2px,color:#fff
-    classDef bufferStyle fill:#8b5cf6,stroke:#6d28d9,stroke-width:2px,color:#fff
-    classDef symStyle fill:#ef4444,stroke:#dc2626,stroke-width:2px,color:#fff
-    
-    class SIMD,SIMDImpact simdStyle
-    class Lazy,LazyImpact lazyStyle
-    class Rayon,RayonImpact rayonStyle
-    class Buffers,BufferImpact bufferStyle
-    class Symmetry,SymImpact symStyle
+    class SIMD simdStyle
+    class Lazy lazyStyle
+    class Rayon rayonStyle
+    class Buffers bufferStyle
+    class Symmetry symStyle
 ```
 
 **1. SIMD-Accelerated Dot Products**
@@ -268,30 +246,28 @@ fn dot_simd(a: &[f64], b: &[f64]) -> f64
 
 The most expensive operation ($$O(n^3)$$ eigen decomposition) is deferred using an adaptive gap:
 
-$$\mathrm{lazy\_gap\_evals} = \frac{0.5 \cdot n \cdot \lambda}{(c_1 + c_{\mu}) \cdot n^2}$$
+$$\text{lazy\_gap\_evals} = \frac{0.5 \cdot n \cdot \lambda}{(c_1 + c_{\mu}) \cdot n^2}$$
 
 ```mermaid
 flowchart TD
-    AskCall["ask called"] --> CheckGap{"current_eval > updated_eval + gap?"}
-    CheckGap -->|No| UseCache["Use cached eigenbasis"]
-    CheckGap -->|Yes| EnforceSym["Enforce symmetry A = (A + A^T) / 2"]
-    EnforceSym --> EigenDecomp["Eigen decomposition O(n³)"]
-    EigenDecomp --> FloorEigs["Floor eigenvalues to 1e-20"]
-    FloorEigs --> ComputeInvSqrt["Compute C^(-1/2)"]
-    ComputeInvSqrt --> UpdateCache["Update cached eigenbasis"]
+    AskCall[ask called] --> CheckGap{gap exceeded?}
+    CheckGap -->|No| UseCache[Use cache]
+    CheckGap -->|Yes| EnforceSym[Enforce symmetry]
+    EnforceSym --> EigenDecomp[Eigen O(n³)]
+    EigenDecomp --> UpdateCache[Update cache]
     UpdateCache --> UseCache
-    UseCache --> Sample["Sample candidates"]
+    UseCache --> Sample[Sample]
     
-    classDef decisionStyle fill:#f59e0b,stroke:#d97706,stroke-width:2px,color:#fff
-    classDef computeStyle fill:#3b82f6,stroke:#1e40af,stroke-width:2px,color:#fff
-    classDef cacheStyle fill:#10b981,stroke:#059669,stroke-width:2px,color:#fff
+    classDef decisionStyle fill:#ffe0b3,stroke:#ffcc80,stroke-width:1px,color:#333
+    classDef computeStyle fill:#b3d9ff,stroke:#7fb3d3,stroke-width:1px,color:#333
+    classDef cacheStyle fill:#b3e5d1,stroke:#7fb8a3,stroke-width:1px,color:#333
     
     class CheckGap decisionStyle
-    class EnforceSym,EigenDecomp,FloorEigs,ComputeInvSqrt,UpdateCache computeStyle
+    class EnforceSym,EigenDecomp,UpdateCache computeStyle
     class UseCache,Sample cacheStyle
 ```
 
-- Eigensystem only recomputed when $$\mathrm{current\_eval} > \mathrm{updated\_eval} + \mathrm{lazy\_gap\_evals}$$
+- Eigensystem only recomputed when $$\text{current\_eval} > \text{updated\_eval} + \text{lazy\_gap\_evals}$$
 - Gap grows with dimension and learning rates, naturally reducing update frequency
 - Covariance matrix updates continue (cheap rank-one/rank-μ), but sampling uses cached eigenbasis
 - **Impact**: Reduces eigen decompositions by 5-10x in typical runs, critical for high-dimensional problems
@@ -361,37 +337,34 @@ Multi-stage constraint satisfaction with fallback mechanisms:
 
 ```mermaid
 flowchart TD
-    Sample[Sample candidate x] --> BoxProj[Box Projection<br/>SIMD clamp to lb, ub]
-    BoxProj --> Mirror{mirror enabled?}
-    Mirror -->|Yes| MirrorOp[Reflect into bounds<br/>using modulo]
-    Mirror -->|No| CheckReject{reject function?}
+    Sample[Sample] --> BoxProj[Box Projection]
+    BoxProj --> Mirror{mirror?}
+    Mirror -->|Yes| MirrorOp[Reflect]
+    Mirror -->|No| CheckReject{reject?}
     MirrorOp --> CheckReject
-    CheckReject -->|Yes| RejectCheck[Check feasibility]
-    RejectCheck -->|Infeasible| Resample{attempts < max_resamples?}
+    CheckReject -->|Yes| RejectCheck[Check]
+    RejectCheck -->|Fail| Resample{retry?}
     Resample -->|Yes| Sample
-    Resample -->|No| CheckRepair{repair function?}
-    RejectCheck -->|Feasible| CheckRepair
+    Resample -->|No| CheckRepair{repair?}
+    RejectCheck -->|Pass| CheckRepair
     CheckReject -->|No| CheckRepair
-    CheckRepair -->|Yes| RepairOp[Repair x]
-    CheckRepair -->|No| EvalObj[Evaluate objective fx]
+    CheckRepair -->|Yes| RepairOp[Repair]
+    CheckRepair -->|No| EvalObj[Eval]
     RepairOp --> EvalObj
-    EvalObj --> CheckPenalty{penalty function?}
-    CheckPenalty -->|Yes| AddPenalty[Add penalty to f]
-    CheckPenalty -->|No| CheckRejectFinal{reject function<br/>still infeasible?}
-    CheckRejectFinal -->|Yes| LargePenalty[Add large penalty 1e6]
-    CheckRejectFinal -->|No| ReturnFit[Return fitness]
+    EvalObj --> CheckPenalty{penalty?}
+    CheckPenalty -->|Yes| AddPenalty[Penalty]
+    CheckPenalty -->|No| ReturnFit[Return]
     AddPenalty --> ReturnFit
-    LargePenalty --> ReturnFit
     
-    classDef sampleStyle fill:#3b82f6,stroke:#1e40af,stroke-width:2px,color:#fff
-    classDef constraintStyle fill:#10b981,stroke:#059669,stroke-width:2px,color:#fff
-    classDef decisionStyle fill:#f59e0b,stroke:#d97706,stroke-width:2px,color:#fff
-    classDef penaltyStyle fill:#ef4444,stroke:#dc2626,stroke-width:2px,color:#fff
+    classDef sampleStyle fill:#b3d9ff,stroke:#7fb3d3,stroke-width:1px,color:#333
+    classDef constraintStyle fill:#b3e5d1,stroke:#7fb8a3,stroke-width:1px,color:#333
+    classDef decisionStyle fill:#ffe0b3,stroke:#ffcc80,stroke-width:1px,color:#333
+    classDef penaltyStyle fill:#f8bbd0,stroke:#f48fb1,stroke-width:1px,color:#333
     
     class Sample,Resample sampleStyle
     class BoxProj,MirrorOp,RejectCheck,RepairOp constraintStyle
-    class Mirror,CheckReject,Resample,CheckRepair,CheckPenalty,CheckRejectFinal decisionStyle
-    class AddPenalty,LargePenalty penaltyStyle
+    class Mirror,CheckReject,Resample,CheckRepair,CheckPenalty decisionStyle
+    class AddPenalty penaltyStyle
     class EvalObj,ReturnFit sampleStyle
 ```
 
@@ -403,7 +376,7 @@ flowchart TD
 
 2. **Mirroring** (optional): Reflects out-of-bounds points into feasible region
    
-   $$x_i \leftarrow \begin{cases} lb_i + |x_i - lb_i| \bmod (2w_i) & \mathrm{if\ } |x_i - lb_i| \bmod (2w_i) \leq w_i \\ ub_i - (|x_i - lb_i| \bmod (2w_i) - w_i) & \mathrm{otherwise} \end{cases}$$
+   $$x_i \leftarrow \begin{cases} lb_i + (|x_i - lb_i| \bmod 2w_i) & \text{if } (|x_i - lb_i| \bmod 2w_i) \leq w_i \\ ub_i - ((|x_i - lb_i| \bmod 2w_i) - w_i) & \text{otherwise} \end{cases}$$
    
    where $$w_i = ub_i - lb_i$$
 
@@ -413,7 +386,7 @@ flowchart TD
 
 5. **Penalty** (optional): Adds penalty to fitness for remaining violations
    
-   $$f_{\mathrm{penalized}} = f(\mathbf{x}) + \mathrm{penalty}(\mathbf{x})$$
+   $$f_{\text{penalized}} = f(\mathbf{x}) + \text{penalty}(\mathbf{x})$$
 
 - **Why**: Flexible constraint handling accommodates diverse problem types
 - **Impact**: Works with box constraints, nonlinear constraints (via penalty), and custom feasibility rules
@@ -731,7 +704,7 @@ Performance optimization in fastcma follows a philosophy of targeted improvement
 
 **3. Lazy Eigensystem Updates**
 - **Strategy**: Defer expensive $$O(n^3)$$ eigen decomposition until necessary
-- **Gap calculation**: $$\mathrm{lazy\_gap\_evals} = \frac{0.5 \cdot n \cdot \lambda}{(c_1 + c_{\mu}) \cdot n^2}$$
+- **Gap calculation**: $$\text{lazy\_gap\_evals} = \frac{0.5 \cdot n \cdot \lambda}{(c_1 + c_{\mu}) \cdot n^2}$$
 - **Impact**: Reduces eigen decompositions by 5-10x in typical runs
 - **Critical for**: High-dimensional problems ($$n > 20$$) where eigen decomposition dominates
 
@@ -814,34 +787,26 @@ The suite's design philosophy emphasizes deterministic testing through seeded ra
 The test suite is organized into multiple levels of difficulty:
 
 ```mermaid
-flowchart TD
-    Start([Test Suite]) --> Core[Core Unit Tests<br/>~5-10s]
-    Start --> Integration[Integration Benchmarks<br/>~10-15s]
-    Start --> Hard[Hard Suite<br/>20 functions<br/>~90s]
-    Start --> VeryHard[Very-Hard Suite<br/>~20 extreme cases<br/>~5-10min]
-    Start --> Python[Python Integration<br/>API + Roundtrip]
-    Start --> FFI[FFI Tests<br/>C/C++ bindings]
-    Start --> Stability[Stability Tests<br/>Long-running]
+flowchart LR
+    Start([Tests]) --> Core[Core 5-10s]
+    Start --> Integration[Integration 10-15s]
+    Start --> Hard[Hard ~90s]
+    Start --> VeryHard[Very-Hard 5-10min]
+    Start --> Python[Python API]
+    Start --> FFI[C/C++ FFI]
+    Start --> Stability[Stability]
     
-    Core --> CoreTests[Sphere, Rosenbrock<br/>Noise handling<br/>Constraints<br/>Restarts]
-    Integration --> IntTests[6 classic functions<br/>Multi-seed runs<br/>Parallel restarts]
-    Hard --> HardTests[Zakharov, Levy, Powell<br/>Styblinski-Tang, Elliptic<br/>High-dim variants]
-    VeryHard --> VHTests[Katsuura, Weierstrass<br/>30D variants<br/>Fractal functions]
-    Python --> PyTests[API smoke<br/>FastAPI integration<br/>Roundtrip validation]
-    FFI --> FFITests[Compile C demo<br/>Run FFI binary]
-    Stability --> StabTests[Numerical stability<br/>Regression prevention]
+    classDef coreStyle fill:#b3e5d1,stroke:#7fb8a3,stroke-width:1px,color:#333
+    classDef intStyle fill:#b3d9ff,stroke:#7fb3d3,stroke-width:1px,color:#333
+    classDef hardStyle fill:#ffe0b3,stroke:#ffcc80,stroke-width:1px,color:#333
+    classDef veryHardStyle fill:#f8bbd0,stroke:#f48fb1,stroke-width:1px,color:#333
+    classDef otherStyle fill:#e1bee7,stroke:#ce93d8,stroke-width:1px,color:#333
     
-    classDef coreStyle fill:#10b981,stroke:#059669,stroke-width:2px,color:#fff
-    classDef intStyle fill:#3b82f6,stroke:#1e40af,stroke-width:2px,color:#fff
-    classDef hardStyle fill:#f59e0b,stroke:#d97706,stroke-width:2px,color:#fff
-    classDef veryHardStyle fill:#ef4444,stroke:#dc2626,stroke-width:2px,color:#fff
-    classDef otherStyle fill:#8b5cf6,stroke:#6d28d9,stroke-width:2px,color:#fff
-    
-    class Core,CoreTests coreStyle
-    class Integration,IntTests intStyle
-    class Hard,HardTests hardStyle
-    class VeryHard,VHTests veryHardStyle
-    class Python,PyTests,FFI,FFITests,Stability,StabTests otherStyle
+    class Core coreStyle
+    class Integration intStyle
+    class Hard hardStyle
+    class VeryHard veryHardStyle
+    class Python,FFI,Stability otherStyle
 ```
 
 **Test Category Comparison:**
@@ -1063,25 +1028,25 @@ The project uses GitHub Actions for comprehensive CI/CD automation. Workflow fil
 
 ```mermaid
 flowchart TD
-    Trigger[Push/PR/Tag/Schedule] --> Test[test job<br/>Core tests + benchmarks]
-    Trigger --> Build[build job<br/>Matrix: 3 OS × 3 Python]
+    Trigger[Trigger] --> Test[Test]
+    Trigger --> Build[Build]
     
-    Test --> VeryHardLite{very-hard-lite<br/>Nightly}
-    Test --> VeryHard{very-hard<br/>Weekly}
-    Test --> PythonInt[integration-python<br/>Python 3.12, 3.13]
-    Test --> FFIInt[integration-ffi<br/>C/C++ bindings]
-    Test --> Demo[demo<br/>Setup script validation]
-    Test --> Miri{miri<br/>Weekly UB detection}
-    Test --> ASAN{asan<br/>Weekly memory check}
+    Test --> VeryHardLite{Nightly}
+    Test --> VeryHard{Weekly}
+    Test --> PythonInt[Python]
+    Test --> FFIInt[FFI]
+    Test --> Demo[Demo]
+    Test --> Miri{Weekly}
+    Test --> ASAN{Weekly}
     
-    Build --> BuildWheels[Build wheels<br/>Ubuntu/Windows/macOS<br/>Python 3.12/3.13/3.14]
-    BuildWheels --> UploadWheels[Upload artifacts]
+    Build --> BuildWheels[Wheels]
+    BuildWheels --> UploadWheels[Upload]
     
-    UploadWheels --> TagCheck{Tag v*?}
-    TagCheck -->|Yes| Publish[publish job<br/>Upload to PyPI]
+    UploadWheels --> TagCheck{Tag?}
+    TagCheck -->|Yes| Publish[PyPI]
     TagCheck -->|No| End1([End])
     
-    Publish --> PyPISmoke[pypi-smoke<br/>Validate PyPI install]
+    Publish --> PyPISmoke[Smoke]
     PyPISmoke --> End2([End])
     
     VeryHardLite --> End1
@@ -1092,10 +1057,10 @@ flowchart TD
     Miri --> End1
     ASAN --> End1
     
-    classDef testStyle fill:#10b981,stroke:#059669,stroke-width:2px,color:#fff
-    classDef buildStyle fill:#3b82f6,stroke:#1e40af,stroke-width:2px,color:#fff
-    classDef publishStyle fill:#f59e0b,stroke:#d97706,stroke-width:2px,color:#fff
-    classDef decisionStyle fill:#8b5cf6,stroke:#6d28d9,stroke-width:2px,color:#fff
+    classDef testStyle fill:#b3e5d1,stroke:#7fb8a3,stroke-width:1px,color:#333
+    classDef buildStyle fill:#b3d9ff,stroke:#7fb3d3,stroke-width:1px,color:#333
+    classDef publishStyle fill:#ffe0b3,stroke:#ffcc80,stroke-width:1px,color:#333
+    classDef decisionStyle fill:#e1bee7,stroke:#ce93d8,stroke-width:1px,color:#333
     
     class Test,VeryHardLite,VeryHard,PythonInt,FFIInt,Demo,Miri,ASAN testStyle
     class Build,BuildWheels,UploadWheels buildStyle
