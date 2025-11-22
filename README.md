@@ -6,7 +6,7 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/Dicklesworthstone/fast_cmaes/build-wheels.yml?branch=main&label=CI&logo=github&style=for-the-badge)](https://github.com/Dicklesworthstone/fast_cmaes/actions/workflows/build-wheels.yml)
 [![PyPI](https://img.shields.io/pypi/v/fast-cmaes?label=PyPI&logo=pypi&logoColor=white&style=for-the-badge&color=3776ab)](https://pypi.org/project/fast-cmaes/)
-[![Python](https://img.shields.io/badge/Python-3.12%20%7C%203.13%20%7C%203.14-3776ab?logo=python&logoColor=white&style=for-the-badge)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-3776ab?logo=python&logoColor=white&style=for-the-badge)](https://www.python.org/)
 [![Rust](https://img.shields.io/badge/Rust-nightly-ce412b?logo=rust&logoColor=white&style=for-the-badge)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
 
@@ -131,29 +131,47 @@ flowchart TD
 **Mathematical Formulation:**
 
 - **`ask()`**: Generates $$\lambda$$ candidate solutions by sampling:
-  
-  $$x\\_i \sim \mathcal{N}(\mathbf{x}\\_\{\mathrm{mean}\}, \sigma^2 \mathbf{C})$$
-  
-  where $$\mathbf{C}$$ is the covariance matrix and $$\sigma$$ is the step size.
+
+  $$x_i \sim \mathcal{N}(\mathbf{x}_{\mathrm{mean}}, \sigma^2 \mathbf{C})$$
+
+  **What this means:** We create new candidate solutions by drawing from a multivariate normal distribution centered at the current best estimate ($$\mathbf{x}_{\mathrm{mean}}$$), with spread controlled by the step size $$\sigma$$ and shape determined by the covariance matrix $$\mathbf{C}$$. Think of this as generating "guesses" around our current best point, where the covariance matrix learns the shape of the problem landscape.
+
+  **Why this matters:** Instead of randomly searching everywhere, CMA-ES learns the "direction" and "shape" of good solutions through the covariance matrix, making each generation of candidates smarter than the last.
 
 - **`tell()`**: Updates distribution parameters:
-  - **Weighted mean**: 
-    
-    $$\mathbf{x}\\_\{\mathrm{mean}\} \leftarrow \sum\\_\{i=1\}^{\mu} w\\_i \mathbf{x}\\_\{i:\lambda\}$$
-  
-  - **Evolution paths**: 
-    
-    $$\mathbf{p}\\_c \leftarrow (1-c\\_c)\mathbf{p}\\_c + c\\_c h\\_\{\sigma\} \frac{\mathbf{x}\\_\{\mathrm{mean}\} - \mathbf{x}\\_\{\mathrm{old}\}}{\sigma}$$
-    
-    $$\mathbf{p}\\_\{\sigma\} \leftarrow (1-c\\_\{\sigma\})\mathbf{p}\\_\{\sigma\} + c\\_\{\sigma\} \frac{\mathbf{C}^{-1/2}(\mathbf{x}\\_\{\mathrm{mean}\} - \mathbf{x}\\_\{\mathrm{old}\})}{\sigma}$$
-  
-  - **Covariance update**: 
-    
-    $$\mathbf{C} \leftarrow (1-c\\_1-c\\_\{\mu\})\mathbf{C} + c\\_1 \mathbf{p}\\_c \mathbf{p}\\_c^T + c\\_\{\mu\} \sum\\_\{i=1\}^{\mu} w\\_i \mathbf{y}\\_\{i:\lambda\} \mathbf{y}\\_\{i:\lambda\}^T$$
-  
-  - **Step size adaptation**: 
-    
+  - **Weighted mean**:
+
+    $$\mathbf{x}_{\mathrm{mean}} \leftarrow \sum_{i=1}^{\mu} w_i \mathbf{x}_{i:\lambda}$$
+
+    **What this means:** We update our search center by taking a weighted average of the best $$\mu$$ solutions from the current generation. Better solutions get higher weights ($$w_i$$), so the center moves toward promising regions.
+
+    **Why this matters:** Instead of jumping to the single best solution, we take an "elite average" that reduces noise and provides a more stable search direction.
+
+  - **Evolution paths**:
+
+    $$\mathbf{p}_c \leftarrow (1-c_c)\mathbf{p}_c + c_c h_{\sigma} \frac{\mathbf{x}_{\mathrm{mean}} - \mathbf{x}_{\mathrm{old}}}{\sigma}$$
+
+    $$\mathbf{p}_{\sigma} \leftarrow (1-c_{\sigma})\mathbf{p}_{\sigma} + c_{\sigma} \frac{\mathbf{C}^{-1/2}(\mathbf{x}_{\mathrm{mean}} - \mathbf{x}_{\mathrm{old}})}{\sigma}$$
+
+    **What this means:** Evolution paths track the direction of recent progress. $$\mathbf{p}_c$$ remembers successful moves (for covariance adaptation), while $$\mathbf{p}_{\sigma}$$ monitors step size effectiveness. The $$h_{\sigma}$$ term prevents updates when steps are too small.
+
+    **Why this matters:** These "memory" vectors help the algorithm distinguish between random fluctuations and genuine progress, enabling smarter adaptation of both search direction and step size.
+
+  - **Covariance update**:
+
+    $$\mathbf{C} \leftarrow (1-c_1-c_{\mu})\mathbf{C} + c_1 \mathbf{p}_c \mathbf{p}_c^T + c_{\mu} \sum_{i=1}^{\mu} w_i \mathbf{y}_{i:\lambda} \mathbf{y}_{i:\lambda}^T$$
+
+    **What this means:** The covariance matrix evolves through three parts: (1) gradual forgetting of old information, (2) learning from the evolution path direction, and (3) incorporating successful steps from the current population. $$\mathbf{y}_{i:\lambda}$$ are the steps taken relative to the mean.
+
+    **Why this matters:** This is how CMA-ES "learns" the shape of the problem. If good solutions consistently lie along certain directions, the covariance matrix stretches the search distribution in those directions.
+
+  - **Step size adaptation**:
+
     $$\sigma \leftarrow \sigma \exp\left(\frac{c_{\sigma}}{d_{\sigma}}\left(\frac{\|\mathbf{p}_{\sigma}\|}{\mathbb{E}[\|\mathcal{N}(\mathbf{0},\mathbf{I})\|]} - 1\right)\right)$$
+
+    **What this means:** The step size increases when the evolution path is longer than expected (indicating good progress) and decreases when it's shorter (indicating stagnation). The expected length comes from a standard normal distribution.
+
+    **Why this matters:** This automatic step size control prevents the algorithm from taking steps that are too large (missing optima) or too small (wasting evaluations), maintaining an optimal balance between exploration and exploitation.
 
 **2. Covariance Representation (`CovarianceMode`)**
 
@@ -198,7 +216,7 @@ Diagonal covariance takes a pragmatic approach, storing only the $$n$$ diagonal 
 
 The covariance matrix evolves through a combination of rank-one and rank-μ updates:
 
-$$\mathbf{C} \leftarrow (1-c\_1-c\_\{\mu\})\mathbf{C} + c\_1 \mathbf{p}\_c \mathbf{p}\_c^T + c\_\{\mu\} \sum\_{i=1}^{\mu} w\_i \mathbf{y}\_{i:\lambda} \mathbf{y}\_{i:\lambda}^T$$
+$$\mathbf{C} \leftarrow (1-c_1-c_{\mu})\mathbf{C} + c_1 \mathbf{p}_c \mathbf{p}_c^T + c_{\mu} \sum_{i=1}^{\mu} w_i \mathbf{y}_{i:\lambda} \mathbf{y}_{i:\lambda}^T$$
 
 The first term decays the current covariance, preventing it from growing unbounded. The second term incorporates the evolution path $$\mathbf{p}_c$$, capturing the direction of recent successful steps. The third term aggregates information from the current population, with weights $$w_i$$ emphasizing better solutions. This dual mechanism combines short-term momentum (evolution path) with long-term learning (population statistics), enabling robust adaptation to diverse problem landscapes.
 
@@ -246,7 +264,11 @@ fn dot_simd(a: &[f64], b: &[f64]) -> f64
 
 The most expensive operation ($$O(n^3)$$ eigen decomposition) is deferred using an adaptive gap:
 
-$$\mathrm{lazy\\_gap\\_evals} = \frac{0.5 \cdot n \cdot \lambda}{(c\\_1 + c\\_\{\mu\}) \cdot n^2}$$
+$$\mathrm{lazy\_gap\_evals} = \frac{0.5 \cdot n \cdot \lambda}{(c_1 + c_{\mu}) \cdot n^2}$$
+
+**What this means:** This formula calculates how long we can wait before recomputing the expensive eigen decomposition. The gap grows with problem dimension ($$n$$), population size ($$\lambda$$), and learning rates ($$c_1, c_{\mu}$$), but shrinks relative to the cost of the decomposition ($$n^2$$).
+
+**Why this matters:** Eigen decomposition can be 90% of runtime in high dimensions, but the eigenvectors change slowly. This optimization defers the expensive computation until it's actually needed, reducing it by 5-10x in typical runs.
 
 ```mermaid
 flowchart TD
@@ -267,7 +289,7 @@ flowchart TD
     class UseCache,Sample cacheStyle
 ```
 
-- Eigensystem only recomputed when $$\mathrm{current\\_eval} > \mathrm{updated\\_eval} + \mathrm{lazy\\_gap\\_evals}$$
+- Eigensystem only recomputed when $$\mathrm{current\_eval} > \mathrm{updated\_eval} + \mathrm{lazy\_gap\_evals}$$
 - Gap grows with dimension and learning rates, naturally reducing update frequency
 - Covariance matrix updates continue (cheap rank-one/rank-μ), but sampling uses cached eigenbasis
 - **Impact**: Reduces eigen decompositions by 5-10x in typical runs, critical for high-dimensional problems
@@ -371,22 +393,34 @@ flowchart TD
 **Stages:**
 
 1. **Box projection** (SIMD-accelerated): Clamps to $$[\mathbf{lb}, \mathbf{ub}]$$ bounds
-   
-   $$x\\_i \leftarrow \max(\min(x\\_i, ub\\_i), lb\\_i)$$
+
+   $$x_i \leftarrow \max(\min(x_i, ub_i), lb_i)$$
+
+   **What this means:** For each dimension, we ensure the candidate solution stays within the bounds by taking the minimum of the upper bound and maximum of the lower bound. It's like bouncing off invisible walls.
+
+   **Why this matters:** Simple and fast way to handle box constraints without rejecting potentially good solutions that are just slightly out of bounds.
 
 2. **Mirroring** (optional): Reflects out-of-bounds points into feasible region
-   
-   $$x\\_i \leftarrow \begin{cases} lb\\_i + (|x\\_i - lb\\_i| \bmod 2w\\_i) & \mathrm{if\ } (|x\\_i - lb\\_i| \bmod 2w\\_i) \leq w\\_i \\ ub\\_i - ((|x\\_i - lb\\_i| \bmod 2w\\_i) - w\\_i) & \mathrm{otherwise} \end{cases}$$
-   
-   where $$w\\_i = ub\\_i - lb\\_i$$
+
+   $$x_i \leftarrow \begin{cases} lb_i + (|x_i - lb_i| \bmod 2w_i) & \mathrm{if\ } (|x_i - lb_i| \bmod 2w_i) \leq w_i \\ ub_i - ((|x_i - lb_i| \bmod 2w_i) - w_i) & \mathrm{otherwise} \end{cases}$$
+
+   where $$w_i = ub_i - lb_i$$
+
+   **What this means:** Points that go outside bounds get "folded back" into the feasible region using modular arithmetic. It's like wrapping around the edges of the box, creating a toroidal search space.
+
+   **Why this matters:** Instead of clamping (which can create artificial boundaries), mirroring preserves the search direction and maintains exploration near boundaries.
 
 3. **Rejection/resampling**: Up to `max_resamples` attempts if `reject()` predicate fails
 
 4. **Repair** (optional): User-provided function to fix infeasible points
 
 5. **Penalty** (optional): Adds penalty to fitness for remaining violations
-   
-   $$f\_\{\mathrm{penalized}\} = f(\mathbf{x}) + \mathrm{penalty}(\mathbf{x})$$
+
+   $$f_{\mathrm{penalized}} = f(\mathbf{x}) + \mathrm{penalty}(\mathbf{x})$$
+
+   **What this means:** If a solution violates constraints, we add an extra penalty term to its fitness score, making it less attractive to the optimizer. The penalty function quantifies how "bad" the constraint violation is.
+
+   **Why this matters:** Allows CMA-ES to handle complex constraints (like nonlinear inequalities) by converting them into a modified objective function that guides search away from infeasible regions.
 
 - **Why**: Flexible constraint handling accommodates diverse problem types
 - **Impact**: Works with box constraints, nonlinear constraints (via penalty), and custom feasibility rules
@@ -493,7 +527,7 @@ Installation follows standard Python package management practices, with pre-buil
 
 ### Quick Install (PyPI)
 
-The simplest installation path uses PyPI's pre-built wheels, which work out of the box on Linux, macOS, and Windows for Python 3.12 through 3.14. The package installs as the `fastcma` module, providing immediate access to all optimization functions.
+The simplest installation path uses PyPI's pre-built wheels, which work out of the box on Linux, macOS, and Windows for Python 3.9 through 3.12. The package installs as the `fastcma` module, providing immediate access to all optimization functions.
 
 ```bash
 python -m pip install fast-cmaes==0.1.4  # installs module `fastcma`
@@ -704,7 +738,7 @@ Performance optimization in fastcma follows a philosophy of targeted improvement
 
 **3. Lazy Eigensystem Updates**
 - **Strategy**: Defer expensive $$O(n^3)$$ eigen decomposition until necessary
-- **Gap calculation**: $$\mathrm{lazy\\_gap\\_evals} = \frac{0.5 \cdot n \cdot \lambda}{(c\\_1 + c\\_\{\mu\}) \cdot n^2}$$
+- **Gap calculation**: $$\mathrm{lazy\_gap\_evals} = \frac{0.5 \cdot n \cdot \lambda}{(c_1 + c_{\mu}) \cdot n^2}$$
 - **Impact**: Reduces eigen decompositions by 5-10x in typical runs
 - **Critical for**: High-dimensional problems ($$n > 20$$) where eigen decomposition dominates
 
@@ -879,34 +913,30 @@ These six functions form the foundation of optimization benchmarking, each expos
 **Sphere**
 $$f(\mathbf{x}) = \sum_{i=1}^{n} x_i^2$$
 
-- **History**: Simplest convex function, introduced in optimization literature as baseline
-- **Why hard**: Tests basic convergence; any optimizer should handle this
-- **Challenge**: Fast convergence tests numerical precision
-- **Optimum**: $$\mathbf{x}^* = \mathbf{0}$$, $$f^* = 0$$
+**What this means:** Just the sum of squares of all variables - the simplest possible optimization problem. The minimum is at the origin where all variables are zero.
+
+**Why it matters:** This is the "hello world" of optimization. Every optimizer should solve this quickly. It's like testing if your calculator can add - if you can't optimize sphere, you have bigger problems.
 
 **Rosenbrock**
 $$f(\mathbf{x}) = \sum_{i=1}^{n-1} \left[100(x_i^2 - x_{i+1})^2 + (x_i - 1)^2\right]$$
 
-- **History**: Introduced by Howard Rosenbrock (1960) to test gradient-based methods
-- **Why hard**: Narrow curved valley; gradient methods struggle with slow convergence
-- **Challenge**: Tests ability to follow curved valleys (CMA-ES strength)
-- **Optimum**: $$\mathbf{x}^* = (1, 1, \ldots, 1)$$, $$f^* = 0$$
+**What this means:** Creates a narrow, curved valley where the optimum is at (1,1,1,...). The $$100(x_i^2 - x_{i+1})^2$$ term creates a steep ridge, while $$(x_i - 1)^2$$ pulls toward the valley floor.
+
+**Why it matters:** Tests if an optimizer can follow curved paths. Gradient methods get stuck because the gradient points steeply uphill initially. CMA-ES excels here because it learns the valley's shape.
 
 **Rastrigin**
 $$f(\mathbf{x}) = 10n + \sum_{i=1}^{n} \left[x_i^2 - 10\cos(2\pi x_i)\right]$$
 
-- **History**: Named after Leonid Rastrigin (1974), designed to test global optimization
-- **Why hard**: Highly multimodal with many local minima (exponentially many in high dimensions)
-- **Challenge**: Tests ability to escape local minima and find global optimum
-- **Optimum**: $$\mathbf{x}^* = \mathbf{0}$$, $$f^* = 0$$
+**What this means:** Combines a sphere-like quadratic term with cosine waves that create many local minima. The cosine creates ripples around the origin, with the number of local optima growing exponentially with dimension.
+
+**Why it matters:** Tests global optimization ability. Simple hill-climbers get trapped in local minima. CMA-ES can escape because its population-based search explores multiple regions simultaneously.
 
 **Ackley**
 $$f(\mathbf{x}) = -20\exp\left(-0.2\sqrt{\frac{1}{n}\sum_{i=1}^{n}x_i^2}\right) - \exp\left(\frac{1}{n}\sum_{i=1}^{n}\cos(2\pi x_i)\right) + 20 + e$$
 
-- **History**: Proposed by David Ackley (1987) for neural network training
-- **Why hard**: Many local minima with narrow global basin; exponential scaling with dimension
-- **Challenge**: Tests convergence in highly multimodal landscapes
-- **Optimum**: $$\mathbf{x}^* = \mathbf{0}$$, $$f^* = 0$$
+**What this means:** Has an exponential bowl shape (first term) with cosine ripples (second term) that create many local minima. The global minimum is a small, narrow basin at the origin.
+
+**Why it matters:** Combines global structure (the bowl) with local complexity (the ripples). Tests if an optimizer can find the global basin while navigating around many distracting local minima.
 
 **Griewank**
 $$f(\mathbf{x}) = \frac{1}{4000}\sum_{i=1}^{n}x_i^2 - \prod_{i=1}^{n}\cos\left(\frac{x_i}{\sqrt{i}}\right) + 1$$
@@ -975,8 +1005,9 @@ $$f(\mathbf{x}) = \frac{1}{2}\sum_{i=1}^{n}(x_i^4 - 16x_i^2 + 5x_i)$$
 **Bent Cigar**
 $$f(\mathbf{x}) = x_1^2 + 10^6\sum_{i=2}^{n}x_i^2$$
 
-- **Challenge**: Extreme condition number ($$10^6$$)
-- **Why hard**: Tests handling of ill-conditioned problems
+**What this means:** The first variable is weighted normally, but all other variables are weighted by a million. It's like a cigar shape - very narrow along most dimensions but normal along the first.
+
+**Why it matters:** Tests numerical conditioning. Most optimizers need tiny steps in the high-weight directions but normal steps in the low-weight direction. Poor conditioning makes many algorithms unstable.
 
 **Elliptic**
 $$f(\mathbf{x}) = \sum_{i=1}^{n}10^{6(i-1)/(n-1)}x_i^2$$
