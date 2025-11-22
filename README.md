@@ -132,24 +132,24 @@ flowchart TD
 
 - **`ask()`**: Generates $$\lambda$$ candidate solutions by sampling:
   
-  $$x_i \sim \mathcal{N}(\mathbf{x}_{\mathrm{mean}}, \sigma^2 \mathbf{C})$$
+  $$x\\_i \sim \mathcal{N}(\mathbf{x}\\_\{\mathrm{mean}\}, \sigma^2 \mathbf{C})$$
   
   where $$\mathbf{C}$$ is the covariance matrix and $$\sigma$$ is the step size.
 
 - **`tell()`**: Updates distribution parameters:
   - **Weighted mean**: 
     
-    $$\mathbf{x}_{\mathrm{mean}} \leftarrow \sum_{i=1}^{\mu} w_i \mathbf{x}_{i:\lambda}$$
+    $$\mathbf{x}\\_\{\mathrm{mean}\} \leftarrow \sum\\_\{i=1\}^{\mu} w\\_i \mathbf{x}\\_\{i:\lambda\}$$
   
   - **Evolution paths**: 
     
-    $$\mathbf{p}_c \leftarrow (1-c_c)\mathbf{p}_c + c_c h_{\sigma} \frac{\mathbf{x}_{\mathrm{mean}} - \mathbf{x}_{\mathrm{old}}}{\sigma}$$
+    $$\mathbf{p}\\_c \leftarrow (1-c\\_c)\mathbf{p}\\_c + c\\_c h\\_\{\sigma\} \frac{\mathbf{x}\\_\{\mathrm{mean}\} - \mathbf{x}\\_\{\mathrm{old}\}}{\sigma}$$
     
-    $$\mathbf{p}_{\sigma} \leftarrow (1-c_{\sigma})\mathbf{p}_{\sigma} + c_{\sigma} \frac{\mathbf{C}^{-1/2}(\mathbf{x}_{\mathrm{mean}} - \mathbf{x}_{\mathrm{old}})}{\sigma}$$
+    $$\mathbf{p}\\_\{\sigma\} \leftarrow (1-c\\_\{\sigma\})\mathbf{p}\\_\{\sigma\} + c\\_\{\sigma\} \frac{\mathbf{C}^{-1/2}(\mathbf{x}\\_\{\mathrm{mean}\} - \mathbf{x}\\_\{\mathrm{old}\})}{\sigma}$$
   
   - **Covariance update**: 
     
-    $$\mathbf{C} \leftarrow (1-c_1-c_{\mu})\mathbf{C} + c_1 \mathbf{p}_c \mathbf{p}_c^T + c_{\mu} \sum_{i=1}^{\mu} w_i \mathbf{y}_{i:\lambda} \mathbf{y}_{i:\lambda}^T$$
+    $$\mathbf{C} \leftarrow (1-c\\_1-c\\_\{\mu\})\mathbf{C} + c\\_1 \mathbf{p}\\_c \mathbf{p}\\_c^T + c\\_\{\mu\} \sum\\_\{i=1\}^{\mu} w\\_i \mathbf{y}\\_\{i:\lambda\} \mathbf{y}\\_\{i:\lambda\}^T$$
   
   - **Step size adaptation**: 
     
@@ -198,7 +198,7 @@ Diagonal covariance takes a pragmatic approach, storing only the $$n$$ diagonal 
 
 The covariance matrix evolves through a combination of rank-one and rank-μ updates:
 
-$$\mathbf{C} \leftarrow (1-c_1-c_{\mu})\mathbf{C} + c_1 \mathbf{p}_c \mathbf{p}_c^T + c_{\mu} \sum_{i=1}^{\mu} w_i \mathbf{y}_{i:\lambda} \mathbf{y}_{i:\lambda}^T$$
+$$\mathbf{C} \leftarrow (1-c\_1-c\_\{\mu\})\mathbf{C} + c\_1 \mathbf{p}\_c \mathbf{p}\_c^T + c\_\{\mu\} \sum\_{i=1}^{\mu} w\_i \mathbf{y}\_{i:\lambda} \mathbf{y}\_{i:\lambda}^T$$
 
 The first term decays the current covariance, preventing it from growing unbounded. The second term incorporates the evolution path $$\mathbf{p}_c$$, capturing the direction of recent successful steps. The third term aggregates information from the current population, with weights $$w_i$$ emphasizing better solutions. This dual mechanism combines short-term momentum (evolution path) with long-term learning (population statistics), enabling robust adaptation to diverse problem landscapes.
 
@@ -246,7 +246,7 @@ fn dot_simd(a: &[f64], b: &[f64]) -> f64
 
 The most expensive operation ($$O(n^3)$$ eigen decomposition) is deferred using an adaptive gap:
 
-$$\text{lazy\_gap\_evals} = \frac{0.5 \cdot n \cdot \lambda}{(c_1 + c_{\mu}) \cdot n^2}$$
+$$\mathrm{lazy\\_gap\\_evals} = \frac{0.5 \cdot n \cdot \lambda}{(c\\_1 + c\\_\{\mu\}) \cdot n^2}$$
 
 ```mermaid
 flowchart TD
@@ -267,7 +267,7 @@ flowchart TD
     class UseCache,Sample cacheStyle
 ```
 
-- Eigensystem only recomputed when $$\text{current\_eval} > \text{updated\_eval} + \text{lazy\_gap\_evals}$$
+- Eigensystem only recomputed when $$\mathrm{current\\_eval} > \mathrm{updated\\_eval} + \mathrm{lazy\\_gap\\_evals}$$
 - Gap grows with dimension and learning rates, naturally reducing update frequency
 - Covariance matrix updates continue (cheap rank-one/rank-μ), but sampling uses cached eigenbasis
 - **Impact**: Reduces eigen decompositions by 5-10x in typical runs, critical for high-dimensional problems
@@ -372,13 +372,13 @@ flowchart TD
 
 1. **Box projection** (SIMD-accelerated): Clamps to $$[\mathbf{lb}, \mathbf{ub}]$$ bounds
    
-   $$x_i \leftarrow \max(\min(x_i, ub_i), lb_i)$$
+   $$x\\_i \leftarrow \max(\min(x\\_i, ub\\_i), lb\\_i)$$
 
 2. **Mirroring** (optional): Reflects out-of-bounds points into feasible region
    
-   $$x_i \leftarrow \begin{cases} lb_i + (|x_i - lb_i| \bmod 2w_i) & \text{if } (|x_i - lb_i| \bmod 2w_i) \leq w_i \\ ub_i - ((|x_i - lb_i| \bmod 2w_i) - w_i) & \text{otherwise} \end{cases}$$
+   $$x\\_i \leftarrow \begin{cases} lb\\_i + (|x\\_i - lb\\_i| \bmod 2w\\_i) & \mathrm{if\ } (|x\\_i - lb\\_i| \bmod 2w\\_i) \leq w\\_i \\ ub\\_i - ((|x\\_i - lb\\_i| \bmod 2w\\_i) - w\\_i) & \mathrm{otherwise} \end{cases}$$
    
-   where $$w_i = ub_i - lb_i$$
+   where $$w\\_i = ub\\_i - lb\\_i$$
 
 3. **Rejection/resampling**: Up to `max_resamples` attempts if `reject()` predicate fails
 
@@ -386,7 +386,7 @@ flowchart TD
 
 5. **Penalty** (optional): Adds penalty to fitness for remaining violations
    
-   $$f_{\text{penalized}} = f(\mathbf{x}) + \text{penalty}(\mathbf{x})$$
+   $$f\_\{\mathrm{penalized}\} = f(\mathbf{x}) + \mathrm{penalty}(\mathbf{x})$$
 
 - **Why**: Flexible constraint handling accommodates diverse problem types
 - **Impact**: Works with box constraints, nonlinear constraints (via penalty), and custom feasibility rules
@@ -704,7 +704,7 @@ Performance optimization in fastcma follows a philosophy of targeted improvement
 
 **3. Lazy Eigensystem Updates**
 - **Strategy**: Defer expensive $$O(n^3)$$ eigen decomposition until necessary
-- **Gap calculation**: $$\text{lazy\_gap\_evals} = \frac{0.5 \cdot n \cdot \lambda}{(c_1 + c_{\mu}) \cdot n^2}$$
+- **Gap calculation**: $$\mathrm{lazy\\_gap\\_evals} = \frac{0.5 \cdot n \cdot \lambda}{(c\\_1 + c\\_\{\mu\}) \cdot n^2}$$
 - **Impact**: Reduces eigen decompositions by 5-10x in typical runs
 - **Critical for**: High-dimensional problems ($$n > 20$$) where eigen decomposition dominates
 
