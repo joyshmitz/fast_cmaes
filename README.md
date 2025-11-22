@@ -266,7 +266,7 @@ The most expensive operation ($$O(n^{3})$$ eigen decomposition) is deferred usin
 
 $$\mathrm{lazy\_gap\_evals} = \frac{0.5 \cdot n \cdot \lambda}{(c_1 + c\_{\mu}) \cdot n^{2}}$$
 
-**What this means:** This formula calculates how long we can wait before recomputing the expensive eigen decomposition. The gap grows with problem dimension ($$n$$), population size ($$\lambda$$), and learning rates ($$c_1, c\_{\mu}$$), but shrinks relative to the cost of the decomposition ($$n^{2}$$).
+**What this means:** This formula calculates how long we can wait before recomputing the expensive eigen decomposition. The gap grows with problem dimension ($$n$$), population size ($$\lambda$$), and learning rates ($$c_1$$, $$c_{\mu}$$), but shrinks relative to the cost of the decomposition ($$n^{2}$$).
 
 **Why this matters:** Eigen decomposition can be 90% of runtime in high dimensions, but the eigenvectors change slowly. This optimization defers the expensive computation until it's actually needed, reducing it by 5-10x in typical runs.
 
@@ -289,7 +289,7 @@ flowchart TD
     class UseCache,Sample cacheStyle
 ```
 
-- Eigensystem only recomputed when $$\mathrm{current\_eval} > \mathrm{updated\_eval} + \mathrm{lazy\_gap\_evals}$$
+- Eigensystem only recomputed when `current_eval > updated_eval + lazy_gap_evals`
 - Gap grows with dimension and learning rates, naturally reducing update frequency
 - Covariance matrix updates continue (cheap rank-one/rank-μ), but sampling uses cached eigenbasis
 - **Impact**: Reduces eigen decompositions by 5-10x in typical runs, critical for high-dimensional problems
