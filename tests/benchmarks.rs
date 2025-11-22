@@ -5,6 +5,7 @@ use fastcma::{test_utils::augmented_lagrangian_penalty_raw, CovarianceModeKind};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use rand_distr::StandardNormal;
 use std::cell::RefCell;
+use std::time::Instant;
 
 fn rastrigin(x: &[f64]) -> f64 {
     let n = x.len() as f64;
@@ -55,6 +56,7 @@ fn rosenbrock_2d_reaches_minimum() {
 
 #[test]
 fn rastrigin_4d_converges() {
+    let start = Instant::now();
     // Rastrigin is multi-modal; explore a small seed set and pick best.
     let best = run_multiseed(
         vec![0.2; 4],
@@ -66,10 +68,15 @@ fn rastrigin_4d_converges() {
         &rastrigin,
     );
     assert!(best < 0.5, "rastrigin optimum not reached: {best}");
+    assert!(
+        start.elapsed().as_millis() < 1_500,
+        "rastrigin timing regression"
+    );
 }
 
 #[test]
 fn rastrigin_bipop_parallel_restarts() {
+    let start = Instant::now();
     let fbest = run_ipop_bipop_parallel(
         vec![0.3; 6],
         0.35,
@@ -82,6 +89,10 @@ fn rastrigin_bipop_parallel_restarts() {
         &rastrigin,
     );
     assert!(fbest < 1.5, "bipop parallel restarts stalled: {fbest}");
+    assert!(
+        start.elapsed().as_millis() < 1_500,
+        "bipop timing regression"
+    );
 }
 
 #[test]
@@ -96,6 +107,7 @@ fn augmented_lagrangian_penalty_basic() {
 
 #[test]
 fn noisy_sphere_noise_handling() {
+    let start = Instant::now();
     let rng = RefCell::new(StdRng::seed_from_u64(12345));
     let noise_sphere = |x: &[f64]| {
         let noise: f64 = rng.borrow_mut().sample::<f64, _>(StandardNormal) * 0.05;
@@ -112,6 +124,10 @@ fn noisy_sphere_noise_handling() {
         noise_sphere,
     );
     assert!(fbest < 0.05, "noise handling failed to converge: {fbest}");
+    assert!(
+        start.elapsed().as_millis() < 800,
+        "noisy sphere timing regression"
+    );
 }
 
 fn schwefel(x: &[f64]) -> f64 {
