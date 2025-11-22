@@ -1144,29 +1144,66 @@ fn fmin_vec(
     Ok((xmin, es_py))
 }
 
-fn apply_box_constraints(x: &mut [f64], lb: Option<&[f64]>, ub: Option<&[f64]>) {
+fn apply_box_constraints(x: &mut [f64], lb: Option<&[f64]>, ub: Option<&[f64]>, mirror: bool) {
     if lb.is_none() && ub.is_none() {
         return;
     }
     let n = x.len();
-    if let Some(l) = lb {
-        for i in 0..n {
-            if i < l.len() {
-                if x[i] < l[i] {
-                    let diff = l[i] - x[i];
-                    x[i] = l[i] + diff;
+
+    // Fast SIMD clamp path when mirroring is off.
+    if !mirror {
+        let mut i = 0;
+        while i + SIMD_LANES <= n {
+            let mut v = SimdF64::from_slice(&x[i..i + SIMD_LANES]);
+            if let Some(l) = lb {
+                let lvec =
+                    SimdF64::from_slice(&l[i..i + SIMD_LANES.min(l.len().saturating_sub(i))]);
+                v = v.simd_max(lvec);
+            }
+            if let Some(u) = ub {
+                let uvec =
+                    SimdF64::from_slice(&u[i..i + SIMD_LANES.min(u.len().saturating_sub(i))]);
+                v = v.simd_min(uvec);
+            }
+            v.as_array()
+                .iter()
+                .zip(&mut x[i..i + SIMD_LANES])
+                .for_each(|(s, t)| *t = *s);
+            i += SIMD_LANES;
+        }
+        for j in i..n {
+            if let Some(l) = lb {
+                if j < l.len() && x[j] < l[j] {
+                    x[j] = l[j];
+                }
+            }
+            if let Some(u) = ub {
+                if j < u.len() && x[j] > u[j] {
+                    x[j] = u[j];
                 }
             }
         }
+        return;
     }
-    if let Some(u) = ub {
-        for i in 0..n {
-            if i < u.len() {
-                if x[i] > u[i] {
-                    let diff = x[i] - u[i];
-                    x[i] = u[i] - diff;
-                }
+
+    // Mirror path (scalar but robust): reflect into [lb, ub] using modulo when width > 0.
+    for i in 0..n {
+        let lo = lb.and_then(|l| l.get(i));
+        let hi = ub.and_then(|u| u.get(i));
+        match (lo, hi) {
+            (Some(&l), Some(&u)) if u > l => {
+                let width = u - l;
+                let delta = x[i] - l;
+                let wrapped = (delta.rem_euclid(2.0 * width)).abs();
+                x[i] = if wrapped <= width {
+                    l + wrapped
+                } else {
+                    u - (wrapped - width)
+                };
             }
+            (Some(&l), _) if x[i] < l => x[i] = l + (l - x[i]).abs(),
+            (_, Some(&u)) if x[i] > u => x[i] = u - (x[i] - u).abs(),
+            _ => {}
         }
     }
 }
@@ -1207,6 +1244,10 @@ fn fmin_constrained(
         Some(v) => Some(v.extract()?),
         None => None,
     };
+    let mirror: bool = constraints
+        .get_item("mirror")?
+        .and_then(|v| v.extract().ok())
+        .unwrap_or(false);
     let max_resamples: usize = constraints
         .get_item("max_resamples")?
         .and_then(|v| v.extract().ok())
@@ -1228,6 +1269,7 @@ fn fmin_constrained(
                 &mut x,
                 lb.as_ref().map(|v: &Vec<f64>| v.as_slice()),
                 ub.as_ref().map(|v: &Vec<f64>| v.as_slice()),
+                mirror,
             );
 
             // Rejection/resample loop.
@@ -1246,6 +1288,7 @@ fn fmin_constrained(
                         &mut x,
                         lb.as_ref().map(|v: &Vec<f64>| v.as_slice()),
                         ub.as_ref().map(|v: &Vec<f64>| v.as_slice()),
+                        mirror,
                     );
                 }
             }
