@@ -35,24 +35,24 @@ Hyper-optimized CMA-ES in Rust with a first-class Python experience. SIMD, rayon
 ## Architecture (Mermaid)
 ```mermaid
 flowchart LR
-    subgraph Python API
-    A[fmin / fmin_vec / CMAES class]
-    B[Constraints & restarts]
-    C[Naive baseline (pure Python)]
+    subgraph PythonAPI["Python API"]
+    A["fmin, fmin_vec, CMAES class"]
+    B["Constraints and restarts"]
+    C["Naive baseline pure Python"]
     end
 
-    subgraph Rust Core (src/lib.rs)
-    D[Ask/Tell loop]
-    E[Covariance update (full/diag)]
-    F[Sigma adaptation]
-    G[SIMD dot + rayon fitness]
-    H[Deterministic seeds]
+    subgraph RustCore["Rust Core src/lib.rs"]
+    D["Ask Tell loop"]
+    E["Covariance update full or diag"]
+    F["Sigma adaptation"]
+    G["SIMD dot and rayon fitness"]
+    H["Deterministic seeds"]
     end
 
-    subgraph Tests & Demos
-    I[Benchmarks: sphere, rosenbrock, rastrigin, ackley, schwefel, griewank]
-    J[Rich TUI demo]
-    K[Python smoke]
+    subgraph TestsDemos["Tests and Demos"]
+    I["Benchmarks sphere rosenbrock rastrigin"]
+    J["Rich TUI demo"]
+    K["Python smoke"]
     end
 
     A --> D
