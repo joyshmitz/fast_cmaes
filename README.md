@@ -34,37 +34,48 @@ Hyper-optimized CMA-ES in Rust with a first-class Python experience. SIMD, rayon
 
 ## Architecture (Mermaid)
 ```mermaid
-flowchart LR
-    subgraph PythonAPI["Python API"]
-    A["fmin, fmin_vec, CMAES class"]
-    B["Constraints and restarts"]
-    C["Naive baseline pure Python"]
+flowchart TD
+    subgraph PythonAPI["🐍 Python API"]
+        direction TB
+        A["fmin, fmin_vec, CMAES class"]
+        B["Constraints and restarts"]
+        C["Naive baseline pure Python"]
+        A -.-> B
+        C -.-> A
     end
 
-    subgraph RustCore["Rust Core src/lib.rs"]
-    D["Ask Tell loop"]
-    E["Covariance update full or diag"]
-    F["Sigma adaptation"]
-    G["SIMD dot and rayon fitness"]
-    H["Deterministic seeds"]
+    subgraph RustCore["🦀 Rust Core src/lib.rs"]
+        direction TB
+        D["Ask Tell loop"]
+        E["Covariance update<br/>full or diag"]
+        F["Sigma adaptation"]
+        G["SIMD dot and<br/>rayon fitness"]
+        H["Deterministic seeds"]
+        D --> E
+        E --> F
+        F --> D
+        D --> G
+        D --> H
     end
 
-    subgraph TestsDemos["Tests and Demos"]
-    I["Benchmarks sphere rosenbrock rastrigin"]
-    J["Rich TUI demo"]
-    K["Python smoke"]
+    subgraph TestsDemos["🧪 Tests and Demos"]
+        direction TB
+        I["Benchmarks<br/>sphere rosenbrock rastrigin"]
+        J["Rich TUI demo"]
+        K["Python smoke"]
     end
 
-    A --> D
-    A --> B
-    B --> D
-    D --> E --> F --> D
-    D --> G
-    D --> H
-    I --> D
-    J --> A
-    K --> A
-    C --> A
+    PythonAPI -->|API calls| RustCore
+    TestsDemos -->|test| RustCore
+    TestsDemos -->|demo| PythonAPI
+
+    classDef pythonStyle fill:#3776ab,stroke:#ffd43b,stroke-width:2px,color:#fff
+    classDef rustStyle fill:#ce412b,stroke:#000,stroke-width:2px,color:#fff
+    classDef testStyle fill:#10b981,stroke:#059669,stroke-width:2px,color:#fff
+
+    class A,B,C pythonStyle
+    class D,E,F,G,H rustStyle
+    class I,J,K testStyle
 ```
 
 ## Features
