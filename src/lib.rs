@@ -1207,6 +1207,11 @@ fn fmin_constrained(
         Some(v) => Some(v.extract()?),
         None => None,
     };
+    let max_resamples: usize = constraints
+        .get_item("max_resamples")?
+        .and_then(|v| v.extract().ok())
+        .unwrap_or(3);
+    let reject_fn: Option<PyObject> = constraints.get_item("reject")?.map(|v| v.into_py(py));
     let repair_fn: Option<PyObject> = constraints.get_item("repair")?.map(|v| v.into_py(py));
     let penalty_fn: Option<PyObject> = constraints.get_item("penalty")?.map(|v| v.into_py(py));
 
@@ -1218,11 +1223,33 @@ fn fmin_constrained(
         let mut x_eval: Vec<Vec<f64>> = Vec::with_capacity(x_raw.len());
         let mut fitvals: Vec<f64> = Vec::with_capacity(x_raw.len());
         for mut x in x_raw {
+            // Box projection first.
             apply_box_constraints(
                 &mut x,
                 lb.as_ref().map(|v: &Vec<f64>| v.as_slice()),
                 ub.as_ref().map(|v: &Vec<f64>| v.as_slice()),
             );
+
+            // Rejection/resample loop.
+            let mut attempts = 0;
+            if let Some(ref reject) = reject_fn {
+                while attempts < max_resamples {
+                    let row = PyList::new_bound(py, &x);
+                    let feasible: bool = reject.call1(py, (row,))?.extract(py)?;
+                    if feasible {
+                        break;
+                    }
+                    attempts += 1;
+                    // draw a new sample
+                    x = es.ask_one();
+                    apply_box_constraints(
+                        &mut x,
+                        lb.as_ref().map(|v: &Vec<f64>| v.as_slice()),
+                        ub.as_ref().map(|v: &Vec<f64>| v.as_slice()),
+                    );
+                }
+            }
+
             if let Some(ref repair) = repair_fn {
                 let row = PyList::new_bound(py, &x);
                 let repaired = repair.call1(py, (row,))?;
@@ -1237,6 +1264,13 @@ fn fmin_constrained(
                 let pval = pen.call1(py, (row2,))?;
                 let p: f64 = pval.extract(py)?;
                 f += p;
+            } else if let Some(ref reject) = reject_fn {
+                // If still infeasible and no penalty provided, assign a large penalty.
+                let row = PyList::new_bound(py, &x);
+                let feasible: bool = reject.call1(py, (row,))?.extract(py)?;
+                if !feasible {
+                    f += 1e6;
+                }
             }
             x_eval.push(x);
             fitvals.push(f);
@@ -1693,6 +1727,16 @@ pub mod test_utils {
         }
 
         best
+    }
+
+    /// Augmented Lagrangian penalty helper for inequality constraints g_i(x) <= 0.
+    pub fn augmented_lagrangian_penalty_raw(g: &[f64], lambda: &[f64], rho: f64) -> f64 {
+        let mut pen = 0.0;
+        for (gi, li) in g.iter().zip(lambda.iter()) {
+            let pos = gi.max(0.0);
+            pen += li * pos + 0.5 * rho * pos * pos;
+        }
+        pen
     }
 }
 

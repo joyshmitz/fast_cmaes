@@ -1,7 +1,7 @@
 use fastcma::test_utils::{
     run_ipop_bipop_parallel, run_multiseed, run_seeded, run_seeded_mode, run_seeded_mode_noise,
 };
-use fastcma::CovarianceModeKind;
+use fastcma::{test_utils::augmented_lagrangian_penalty_raw, CovarianceModeKind};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use rand_distr::StandardNormal;
 use std::cell::RefCell;
@@ -82,6 +82,16 @@ fn rastrigin_bipop_parallel_restarts() {
         &rastrigin,
     );
     assert!(fbest < 1.5, "bipop parallel restarts stalled: {fbest}");
+}
+
+#[test]
+fn augmented_lagrangian_penalty_basic() {
+    let g = vec![0.1, -0.2];
+    let lambda = vec![1.0, 0.5];
+    let rho = 10.0;
+    let pen = augmented_lagrangian_penalty_raw(&g, &lambda, rho);
+    let expected = 1.0 * 0.1 + 0.5 * 0.0 + 0.5 * rho * 0.1 * 0.1;
+    assert!((pen - expected).abs() < 1e-9);
 }
 
 #[test]
