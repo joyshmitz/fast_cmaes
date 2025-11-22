@@ -170,9 +170,13 @@ int main() {
     printf("f=%g x0=%g %g %g %g\n", f, xmin[0], xmin[1], xmin[2], xmin[3]);
 }
 ```
-Compile (adjust path/extension per platform):
+Compile (adjust path/extension per platform) — link against Python because the library is built with PyO3:
 ```bash
-gcc demo.c -L target/release -lfastcma -I include
+gcc demo.c -I include -L target/release -lfastcma $(python3-config --embed --ldflags)
+```
+Run (ensure the library path is visible):
+```bash
+LD_LIBRARY_PATH=target/release ./a.out
 ```
 
 ## REST API example
