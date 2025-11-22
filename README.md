@@ -181,7 +181,7 @@ gcc demo.c -L target/release -lfastcma -I include
 uv pip install "fastapi[standard]" fast-cmaes
 uvicorn examples.api_server:app --reload
 ```
-POST `/optimize` with JSON payload `{ "x0": [0.5, 0.5], "sigma": 0.4, "maxfevals": 5000 }` to get `xmin`, `fbest`, and eval counts.
+POST `/optimize` with JSON body `{ "x0": [0.5, 0.5], "sigma": 0.4, "maxfevals": 5000 }` to get `xmin`, `fbest`, and eval counts.
 
 ## Demos & visualization
 - `examples/python_quickstart.py` – minimal sphere + vectorized demo.
