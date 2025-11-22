@@ -1143,12 +1143,8 @@ fn fmin_constrained(
         Some(v) => Some(v.extract()?),
         None => None,
     };
-    let repair_fn: Option<PyObject> = constraints
-        .get_item("repair")?
-        .map(|v| v.into_py(py));
-    let penalty_fn: Option<PyObject> = constraints
-        .get_item("penalty")?
-        .map(|v| v.into_py(py));
+    let repair_fn: Option<PyObject> = constraints.get_item("repair")?.map(|v| v.into_py(py));
+    let penalty_fn: Option<PyObject> = constraints.get_item("penalty")?.map(|v| v.into_py(py));
 
     loop {
         if es.has_terminated() {
@@ -1361,7 +1357,7 @@ where
 /// Test-only helpers to run deterministic CMA-ES steps from integration tests.
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils {
-    use super::{CmaesState, CovarianceModeKind};
+    use super::{CmaesParameters, CmaesState, CovarianceModeKind};
     use rand::{rngs::StdRng, Rng, SeedableRng};
     use rand_distr::StandardNormal;
 
@@ -1479,6 +1475,122 @@ pub mod test_utils {
                 best = f;
             }
         }
+        best
+    }
+
+    /// Parallel-population restarts (IPOP/BIPOP) with adaptive lambda.
+    /// Maintains multiple CMA-ES populations concurrently and shares a global
+    /// evaluation budget. Returns the best objective value found.
+    pub fn run_ipop_bipop_parallel(
+        x0: Vec<f64>,
+        sigma: f64,
+        max_total_fevals: usize,
+        ftarget: f64,
+        max_restarts: usize,
+        max_parallel: usize,
+        seed: u64,
+        covariance_mode: CovarianceModeKind,
+        objective: &dyn Fn(&[f64]) -> f64,
+    ) -> f64 {
+        struct Pop {
+            es: CmaesState,
+            lam: usize,
+        }
+
+        if max_total_fevals == 0 || max_parallel == 0 {
+            return f64::INFINITY;
+        }
+
+        let n = x0.len();
+        let base_params = CmaesParameters::new(n, None);
+        let base_lam = base_params.lam;
+
+        let mut best = f64::INFINITY;
+        let mut best_x: Option<Vec<f64>> = None;
+        let mut remaining = max_total_fevals;
+        let mut next_restart = 0usize;
+        let mut pops: Vec<Pop> = Vec::new();
+
+        while remaining > 0 && (!pops.is_empty() || next_restart < max_restarts) {
+            while pops.len() < max_parallel && next_restart < max_restarts {
+                let lam = if next_restart % 2 == 0 {
+                    // IPOP branch grows lambda geometrically.
+                    base_lam * (1usize << (next_restart / 2))
+                } else {
+                    // BIPOP branch keeps a small lambda capped to a few dims.
+                    (4 + (3.0 * (n as f64).ln()) as usize).max(4)
+                };
+
+                let xstart = if let Some(ref bx) = best_x {
+                    let mut xs = bx.clone();
+                    let mut rng = StdRng::seed_from_u64(seed.wrapping_add(next_restart as u64));
+                    let scale = sigma * ((next_restart + 1) as f64).sqrt();
+                    for v in &mut xs {
+                        let n: f64 = rng.sample(StandardNormal);
+                        *v += scale * n;
+                    }
+                    xs
+                } else {
+                    x0.clone()
+                };
+
+                // Ensure we respect remaining budget when instantiating.
+                let es = CmaesState::new_with_seed(
+                    xstart.clone(),
+                    sigma,
+                    Some(lam),
+                    Some(ftarget),
+                    Some(remaining),
+                    covariance_mode,
+                    seed.wrapping_add(next_restart as u64),
+                );
+
+                // Guard against tiny remaining budget: if lambda exceeds remaining, skip.
+                if remaining < lam {
+                    break;
+                }
+
+                // Pre-update best with initial state mean if helpful.
+                let (_xbest, fbest, _, _, _, _xmean, _) = es.result();
+                if fbest < best {
+                    best = fbest;
+                    best_x = Some(_xbest.clone());
+                }
+
+                pops.push(Pop { es, lam });
+                next_restart += 1;
+            }
+
+            if pops.is_empty() {
+                break;
+            }
+
+            let mut idx = 0;
+            while idx < pops.len() {
+                let lam = pops[idx].lam;
+                if remaining < lam {
+                    pops.swap_remove(idx);
+                    continue;
+                }
+                let x_candidates = pops[idx].es.ask();
+                let fitvals: Vec<f64> = x_candidates.iter().map(|x| objective(x)).collect();
+                pops[idx].es.tell(x_candidates, fitvals);
+                remaining = remaining.saturating_sub(lam);
+
+                let (xbest, fbest, _, _, _, _, _) = pops[idx].es.result();
+                if fbest < best {
+                    best = fbest;
+                    best_x = Some(xbest.clone());
+                }
+
+                if pops[idx].es.has_terminated() {
+                    pops.swap_remove(idx);
+                } else {
+                    idx += 1;
+                }
+            }
+        }
+
         best
     }
 }

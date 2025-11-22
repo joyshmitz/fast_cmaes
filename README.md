@@ -179,6 +179,7 @@ uv run python examples/rich_tui_demo.py
 - **SIMD** for dot products; **rayon** for parallel ask/tell evaluations.
 - **Lazy eigensystem updates** to reduce eigen decompositions.
 - **Diagonal covariance** option for higher dimensions / speed.
+- **IPOP/BIPOP restarts** including a parallel multi-pop helper (`test_utils::run_ipop_bipop_parallel`); Python `fmin_restart` defaults to BIPOP.
 - **Determinism**: seeded RNG to make tests non-flaky and benchmarks comparable.
 - **Restart helper** (`test_utils::run_with_restarts`) to escape local minima without huge budgets.
 

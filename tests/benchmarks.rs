@@ -1,4 +1,4 @@
-use fastcma::test_utils::{run_multiseed, run_seeded, run_seeded_mode};
+use fastcma::test_utils::{run_ipop_bipop_parallel, run_multiseed, run_seeded, run_seeded_mode};
 use fastcma::CovarianceModeKind;
 
 fn rastrigin(x: &[f64]) -> f64 {
@@ -63,12 +63,25 @@ fn rastrigin_4d_converges() {
     assert!(best < 0.5, "rastrigin optimum not reached: {best}");
 }
 
+#[test]
+fn rastrigin_bipop_parallel_restarts() {
+    let fbest = run_ipop_bipop_parallel(
+        vec![0.3; 6],
+        0.35,
+        30_000,
+        1e-12,
+        3,
+        3,
+        2025,
+        CovarianceModeKind::Full,
+        &rastrigin,
+    );
+    assert!(fbest < 1.5, "bipop parallel restarts stalled: {fbest}");
+}
+
 fn schwefel(x: &[f64]) -> f64 {
     let n = x.len() as f64;
-    let sum: f64 = x
-        .iter()
-        .map(|v| v * (v.abs().sqrt()).sin())
-        .sum();
+    let sum: f64 = x.iter().map(|v| v * (v.abs().sqrt()).sin()).sum();
     418.9829 * n - sum
 }
 
