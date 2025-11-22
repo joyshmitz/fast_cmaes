@@ -246,7 +246,7 @@ fn dot_simd(a: &[f64], b: &[f64]) -> f64
 
 The most expensive operation ($$O(n^3)$$ eigen decomposition) is deferred using an adaptive gap:
 
-$$\mathit{lazy\_gap\_evals} = \frac{0.5 \cdot n \cdot \lambda}{(c_1 + c_{\mu}) \cdot n^2}$$
+$$\text{lazy\_gap\_evals} = \frac{0.5 \cdot n \cdot \lambda}{(c_1 + c_{\mu}) \cdot n^2}$$
 
 ```mermaid
 flowchart TD
@@ -267,7 +267,7 @@ flowchart TD
     class UseCache,Sample cacheStyle
 ```
 
-- Eigensystem only recomputed when $$\mathit{current\_eval} > \mathit{updated\_eval} + \mathit{lazy\_gap\_evals}$$
+- Eigensystem only recomputed when $$\text{current\_eval} > \text{updated\_eval} + \text{lazy\_gap\_evals}$$
 - Gap grows with dimension and learning rates, naturally reducing update frequency
 - Covariance matrix updates continue (cheap rank-one/rank-μ), but sampling uses cached eigenbasis
 - **Impact**: Reduces eigen decompositions by 5-10x in typical runs, critical for high-dimensional problems
@@ -386,7 +386,7 @@ flowchart TD
 
 5. **Penalty** (optional): Adds penalty to fitness for remaining violations
    
-   $$f_{\mathit{penalized}} = f(\mathbf{x}) + \mathit{penalty}(\mathbf{x})$$
+   $$f_{\text{penalized}} = f(\mathbf{x}) + \text{penalty}(\mathbf{x})$$
 
 - **Why**: Flexible constraint handling accommodates diverse problem types
 - **Impact**: Works with box constraints, nonlinear constraints (via penalty), and custom feasibility rules
@@ -704,7 +704,7 @@ Performance optimization in fastcma follows a philosophy of targeted improvement
 
 **3. Lazy Eigensystem Updates**
 - **Strategy**: Defer expensive $$O(n^3)$$ eigen decomposition until necessary
-- **Gap calculation**: $$\mathit{lazy\_gap\_evals} = \frac{0.5 \cdot n \cdot \lambda}{(c_1 + c_{\mu}) \cdot n^2}$$
+- **Gap calculation**: $$\text{lazy\_gap\_evals} = \frac{0.5 \cdot n \cdot \lambda}{(c_1 + c_{\mu}) \cdot n^2}$$
 - **Impact**: Reduces eigen decompositions by 5-10x in typical runs
 - **Critical for**: High-dimensional problems ($$n > 20$$) where eigen decomposition dominates
 
@@ -998,11 +998,19 @@ $$f(\mathbf{x}) = \sum_{i=1}^{n}|x_i| + \prod_{i=1}^{n}|x_i|$$
 
 #### Very-Hard Suite Functions
 
-**Katsuura** (`f(x) = Π[1 + (i+1)Σ|2ʲx - round(2ʲx)|/2ʲ]^(10/n^1.2) - 1`)
+**Katsuura**
+
+$$f(\mathbf{x}) = \prod_{i=1}^{n}\left[1 + (i+1)\sum_{j=1}^{32}\frac{|2^j x_i - \mathrm{round}(2^j x_i)|}{2^j}\right]^{10/n^{1.2}} - 1$$
+
 - **Challenge**: Fractal structure, extremely multimodal
 - **Why hard**: Tests convergence in pathological landscapes
 
-**Weierstrass** (`f(x) = ΣΣ[aᵏcos(2πbᵏ(x+0.5))] - nΣ[aᵏcos(πbᵏ)]`)
+**Weierstrass**
+
+$$f(\mathbf{x}) = \sum_{i=1}^{n}\sum_{k=0}^{k_{\max}}a^k\cos(2\pi b^k(x_i+0.5)) - n\sum_{k=0}^{k_{\max}}a^k\cos(\pi b^k)$$
+
+where $$a = 0.5$$, $$b = 3$$, $$k_{\max} = 20$$
+
 - **Challenge**: Fractal function, nowhere differentiable
 - **Why hard**: Tests robustness to non-smooth landscapes
 
