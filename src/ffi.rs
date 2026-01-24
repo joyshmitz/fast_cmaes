@@ -14,7 +14,12 @@ pub extern "C" fn fastcma_version() -> u32 {
 }
 
 /// Minimize sphere in C: returns best value; fills xmin buffer if provided.
-/// Safety: caller must ensure `xmin` points to at least `dim` f64s when non-null.
+///
+/// # Safety
+///
+/// The caller must ensure that:
+/// - If `xmin` is non-null, it must point to a valid memory region of at least `dim` contiguous `f64` values.
+/// - The memory pointed to by `xmin` must be properly aligned and writable.
 #[no_mangle]
 pub unsafe extern "C" fn fastcma_sphere(
     dim: usize,
@@ -45,8 +50,8 @@ pub unsafe extern "C" fn fastcma_sphere(
     let (xbest, fbest, _eb, _ce, _it, _xm, _std) = es.result();
     if !xmin.is_null() {
         let count = usize::min(dim, xbest.len());
-        for i in 0..count {
-            *xmin.add(i) = xbest[i];
+        for (i, &val) in xbest.iter().enumerate().take(count) {
+            *xmin.add(i) = val;
         }
     }
     fbest

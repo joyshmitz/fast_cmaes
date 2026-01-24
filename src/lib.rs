@@ -107,12 +107,12 @@ impl CmaesParameters {
         });
         let mu = lam / 2;
         let mut weights = vec![0.0; lam];
-        for i in 0..lam {
+        for (i, weight) in weights.iter_mut().enumerate() {
             if i < mu {
                 let num = (lam as f64) / 2.0 + 0.5;
-                weights[i] = num.ln() - ((i + 1) as f64).ln();
+                *weight = num.ln() - ((i + 1) as f64).ln();
             } else {
-                weights[i] = 0.0;
+                *weight = 0.0;
             }
         }
         let w_sum: f64 = weights[..mu].iter().sum();
@@ -298,36 +298,36 @@ impl FullCovariance {
     }
     fn mahalanobis_norm(&self, dx: &[f64], tmp: &mut [f64]) -> f64 {
         let n = self.n;
-        for i in 0..n {
+        for (i, tmp_val) in tmp.iter_mut().enumerate().take(n) {
             let row_start = i * n;
             let mut sum = 0.0;
-            for j in 0..n {
-                sum += self.invsqrt[row_start + j] * dx[j];
+            for (j, &dx_val) in dx.iter().enumerate().take(n) {
+                sum += self.invsqrt[row_start + j] * dx_val;
             }
-            tmp[i] = sum;
+            *tmp_val = sum;
         }
         square_sum_simd(tmp).sqrt()
     }
     fn invsqrt_mul(&self, y: &[f64], out: &mut [f64]) {
         let n = self.n;
-        for i in 0..n {
+        for (i, out_val) in out.iter_mut().enumerate().take(n) {
             let row_start = i * n;
             let mut sum = 0.0;
-            for j in 0..n {
-                sum += self.invsqrt[row_start + j] * y[j];
+            for (j, &y_val) in y.iter().enumerate().take(n) {
+                sum += self.invsqrt[row_start + j] * y_val;
             }
-            out[i] = sum;
+            *out_val = sum;
         }
     }
     fn mul_eigenbasis_vec(&self, z: &[f64], out: &mut [f64]) {
         let n = self.n;
-        for i in 0..n {
+        for (i, out_val) in out.iter_mut().enumerate().take(n) {
             let row_start = i * n;
             let mut sum = 0.0;
-            for j in 0..n {
-                sum += self.eigenbasis[row_start + j] * z[j];
+            for (j, &z_val) in z.iter().enumerate().take(n) {
+                sum += self.eigenbasis[row_start + j] * z_val;
             }
-            out[i] = sum;
+            *out_val = sum;
         }
     }
 }
@@ -1127,7 +1127,7 @@ fn fmin_vec(
     }
     let (xbest, fbest, _evals_best, _counteval, _iters, xmean, _stds) = es.result();
     let xmean_val = {
-        let x_py = PyList::new_bound(py, &[xmean.clone()]);
+        let x_py = PyList::new_bound(py, std::slice::from_ref(&xmean));
         let fit_py = objective_fct.call1(py, (x_py,))?;
         let vals: Vec<f64> = fit_py.extract(py)?;
         if vals.is_empty() {
@@ -1213,6 +1213,7 @@ fn apply_box_constraints(x: &mut [f64], lb: Option<&[f64]>, ub: Option<&[f64]>, 
 #[pyo3(
     signature = (objective_fct, xstart, sigma, constraints, maxfevals=None, ftarget=None, verb_disp=None, covariance_mode=None, noise=false)
 )]
+#[allow(clippy::too_many_arguments)]
 fn fmin_constrained(
     py: Python<'_>,
     objective_fct: PyObject,
@@ -1268,8 +1269,8 @@ fn fmin_constrained(
             // Box projection first.
             apply_box_constraints(
                 &mut x,
-                lb.as_ref().map(|v: &Vec<f64>| v.as_slice()),
-                ub.as_ref().map(|v: &Vec<f64>| v.as_slice()),
+                lb.as_deref(),
+                ub.as_deref(),
                 mirror,
             );
 
@@ -1287,8 +1288,8 @@ fn fmin_constrained(
                     x = es.ask_one();
                     apply_box_constraints(
                         &mut x,
-                        lb.as_ref().map(|v: &Vec<f64>| v.as_slice()),
-                        ub.as_ref().map(|v: &Vec<f64>| v.as_slice()),
+                        lb.as_deref(),
+                        ub.as_deref(),
                         mirror,
                     );
                 }
