@@ -1,13 +1,13 @@
 #![feature(portable_simd)]
 
-use core::simd::{Simd, num::SimdFloat};
+use core::simd::{num::SimdFloat, Simd};
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 #[cfg(feature = "python")]
 use pyo3::types::{PyDict, PyList};
+use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
-use rand::rngs::StdRng;
 use rand_distr::StandardNormal;
 use rayon::prelude::*;
 use std::cmp::Ordering;
@@ -101,7 +101,11 @@ impl CmaesParameters {
         let n_f = n as f64;
         let lam = popsize.unwrap_or_else(|| {
             let v = 4.0 + 3.0 * n_f.ln();
-            if v < 1.0 { 1 } else { v.floor() as usize }
+            if v < 1.0 {
+                1
+            } else {
+                v.floor() as usize
+            }
         });
         let mu = lam / 2;
         let mut weights = vec![0.0; lam];
@@ -540,7 +544,11 @@ impl CmaesState {
             let n_f = n as f64;
             let lam_f = params.lam as f64;
             let v = 100.0 * lam_f + 150.0 * (n_f + 3.0).powi(2) * lam_f.sqrt();
-            if v < 1.0 { 1 } else { v.round() as usize }
+            if v < 1.0 {
+                1
+            } else {
+                v.round() as usize
+            }
         });
         let cov = match covariance_mode {
             CovarianceModeKind::Full => CovarianceMode::Full(FullCovariance::identity(n)),
@@ -1496,7 +1504,7 @@ where
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils {
     use super::{CmaesParameters, CmaesState, CovarianceModeKind, NoiseConfig};
-    use rand::{Rng, SeedableRng, rngs::StdRng};
+    use rand::{rngs::StdRng, Rng, SeedableRng};
     use rand_distr::StandardNormal;
 
     /// Run CMA-ES with a customizable RNG seed and covariance mode; returns best objective value.
