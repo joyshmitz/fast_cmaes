@@ -489,6 +489,7 @@ impl CovarianceMode {
 }
 
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 enum TerminationReason {
     MaxFevals(usize),
     FTarget(f64),
@@ -517,7 +518,9 @@ pub struct CmaesState {
     z_buf: Vec<f64>,
     y_buf: Vec<f64>,
     tmp_buf: Vec<f64>,
+    #[allow(dead_code)]
     pending_arx: Vec<Vec<f64>>,
+    #[allow(dead_code)]
     pending_fitvals: Vec<f64>,
 }
 
@@ -617,6 +620,7 @@ impl CmaesState {
         }
         candidates
     }
+    #[allow(dead_code)]
     fn ask_one(&mut self) -> Vec<f64> {
         self.cov
             .update_eigensystem(self.counteval, self.params.lazy_gap_evals);
@@ -761,6 +765,7 @@ impl CmaesState {
             }
         }
     }
+    #[allow(dead_code)]
     fn tell_one(&mut self, x: Vec<f64>, f: f64) {
         self.pending_arx.push(x);
         self.pending_fitvals.push(f);
@@ -830,6 +835,7 @@ impl CmaesState {
             stds,
         )
     }
+    #[allow(dead_code)]
     fn disp(&self, verb_modulo: usize) {
         if verb_modulo == 0 {
             return;
@@ -1154,6 +1160,7 @@ fn fmin_vec(
     Ok((xmin, es_py))
 }
 
+#[allow(dead_code)]
 fn apply_box_constraints(x: &mut [f64], lb: Option<&[f64]>, ub: Option<&[f64]>, mirror: bool) {
     if lb.is_none() && ub.is_none() {
         return;
